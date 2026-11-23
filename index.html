@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Liegestütz-Planer</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+<style>
+  :root {
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: #eff6ff;
+    --header-bg: #1e293b;
+    --header-text: #f8fafc;
+    --green-bg: #dcfce7;
+    --green-txt: #166534;
+    --amber-bg: #fef3c7;
+    --amber-txt: #92400e;
+    --red-bg: #fee2e2;
+    --red-txt: #991b1b;
+    --shadow: 0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04);
+    --radius: 12px;
+  }
+  [data-theme="dark"] {
+    --bg: #0b1120;
+    --surface: #131c31;
+    --surface-2: #1a2640;
+    --border: #26344f;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-soft: rgba(59,130,246,0.16);
+    --header-bg: #0f172a;
+    --header-text: #f8fafc;
+    --green-bg: rgba(34,197,94,0.18);
+    --green-txt: #86efac;
+    --amber-bg: rgba(245,158,11,0.18);
+    --amber-txt: #fcd34d;
+    --red-bg: rgba(239,68,68,0.18);
+    --red-txt: #fca5a5;
+    --shadow: 0 2px 6px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+    min-height: 100vh;
+    padding-bottom: 84px;
+    transition: background .2s, color .2s;
+  }
+  @media (min-width: 820px) {
+    body { padding-bottom: 32px; }
+  }
+
+  /* Top App Bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--header-bg);
+    color: var(--header-text);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 0 16px;
+  }
+  .topbar-inner {
+    max-width: 1180px; margin: 0 auto;
+    height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+  .brand-badge {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--accent);
+    display: grid; place-items: center; font-size: 1rem; color: #fff;
+  }
+  .desktop-nav { display: none; gap: 4px; }
+  @media (min-width: 820px) { .desktop-nav { display: flex; } }
+  .nav-btn {
+    background: transparent; border: none; color: #cbd5e1;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    font-size: 0.9rem; font-weight: 600; transition: all .15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-btn.active { background: var(--accent); color: #fff; }
+
+  .top-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    background: rgba(255,255,255,0.1); border: none; color: #fff;
+    width: 36px; height: 36px; border-radius: 9px; cursor: pointer;
+    display: grid; place-items: center; font-size: 1rem; transition: background .15s;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.2); }
+
+  /* Mobile Bottom Nav */
+  .mobile-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+  }
+  @media (min-width: 820px) { .mobile-nav { display: none; } }
+  .mnav-btn {
+    background: none; border: none; color: var(--text-muted);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 0.7rem; font-weight: 600; padding: 6px 2px; border-radius: 8px; cursor: pointer;
+  }
+  .mnav-btn span.ic { font-size: 1.2rem; line-height: 1; }
+  .mnav-btn.active { color: var(--accent); background: var(--accent-soft); }
+
+  /* Main Container */
+  .container { max-width: 1180px; margin: 0 auto; padding: 18px 16px; }
+  .tab-panel { display: none; animation: fadeIn .18s ease; }
+  .tab-panel.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* Header Summary Row */
+  .page-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end;
+    gap: 12px; margin-bottom: 16px;
+  }
+  .page-head h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+  .sub-meta { color: var(--text-muted); font-size: 0.88rem; margin-top: 2px; }
+  .goal-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    font-size: 0.82rem; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+
+  /* Grid & Cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (min-width: 900px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+  }
+  .kpi-card { border-top: 3px solid var(--accent); display: flex; flex-direction: column; justify-content: space-between; }
+  .kpi-card.warn { border-top-color: #d97706; background: var(--amber-bg); }
+  .kpi-card.danger { border-top-color: #dc2626; background: var(--red-bg); }
+  .kpi-label { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .kpi-val-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 6px 0; }
+  .kpi-val { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+  .kpi-sub { font-size: 0.78rem; color: var(--text-muted); }
+
+  /* Progress Bar */
+  .pbar { width: 100%; height: 7px; border-radius: 99px; background: var(--border); overflow: hidden; margin: 6px 0 8px; }
+  .pbar-fill { height: 100%; border-radius: 99px; background: var(--accent); transition: width .3s ease; }
+  .pbar-fill.warn { background: #d97706; }
+  .pbar-fill.danger { background: #dc2626; }
+
+  /* Status Banner (Empfehlung) */
+  .banner {
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    font-weight: 600; border: 1px solid transparent;
+  }
+  .banner.green { background: var(--green-bg); color: var(--green-txt); border-color: rgba(22,163,74,0.25); }
+  .banner.amber { background: var(--amber-bg); color: var(--amber-txt); border-color: rgba(217,119,6,0.25); }
+  .banner.red { background: var(--red-bg); color: var(--red-txt); border-color: rgba(220,38,38,0.25); }
+  .banner-title { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; display: block; margin-bottom: 2px; }
+
+  /* Two-Column Layouts */
+  .grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (min-width: 860px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  /* Form Elements & Buttons */
+  label.fld-lbl { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  select, input[type="text"], input[type="number"], input[type="date"], input[type="time"], textarea {
+    width: 100%; padding: 10px 12px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    font-size: 0.95rem; font-family: inherit; outline: none; transition: border .15s;
+  }
+  select:focus, input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 10px 16px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-weight: 700; font-size: 0.9rem;
+    cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .btn:hover { filter: brightness(0.96); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-hover); filter: none; }
+  .btn-danger { background: var(--red-bg); color: var(--red-txt); border-color: transparent; }
+  .btn-sm { padding: 6px 11px; font-size: 0.82rem; border-radius: 7px; }
+  .btn-lg { padding: 13px 20px; font-size: 1rem; width: 100%; }
+
+  /* Info Rows */
+  .info-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .info-row {
+    display: grid; grid-template-columns: 110px 1fr; gap: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.92rem;
+  }
+  .info-row .k { color: var(--text-muted); font-weight: 600; font-size: 0.84rem; }
+  .info-row .v { font-weight: 500; }
+  .info-row .v strong { font-weight: 700; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+  th {
+    background: var(--header-bg); color: var(--header-text);
+    text-align: left; padding: 10px 10px; font-weight: 700; font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:nth-child(even) td { background: var(--surface-2); }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 700; white-space: nowrap;
+  }
+  .badge-blue { background: var(--accent-soft); color: var(--accent); }
+  .badge-green { background: var(--green-bg); color: var(--green-txt); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber-txt); }
+  .badge-red { background: var(--red-bg); color: var(--red-txt); }
+  .badge-gray { background: var(--border); color: var(--text-muted); }
+
+  /* Live Workout & Timer */
+  .mode-tabs { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 14px; }
+  .mode-tab { border: none; background: transparent; color: var(--text-muted); padding: 7px 14px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+  .mode-tab.active { background: var(--accent); color: #fff; }
+
+  .timer-box {
+    text-align: center; padding: 20px 16px; border-radius: var(--radius);
+    background: var(--surface-2); border: 1px solid var(--border);
+  }
+  .timer-display {
+    font-size: 3.4rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.03em; margin: 6px 0; color: var(--text);
+  }
+  .timer-display.running { color: var(--accent); }
+  .timer-display.done { color: #16a34a; }
+  .timer-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+  .preset-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+
+  .set-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .set-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-soft); color: var(--accent);
+    padding: 6px 11px; border-radius: 9px; font-weight: 700; font-size: 0.92rem;
+  }
+  .set-chip button {
+    background: none; border: none; color: inherit; cursor: pointer; font-weight: 800; font-size: 0.95rem; opacity: 0.7;
+  }
+  .set-chip button:hover { opacity: 1; }
+
+  .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .choice-chip {
+    padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-weight: 700; font-size: 0.85rem; cursor: pointer;
+  }
+  .choice-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .choice-chip.warn-active { background: #dc2626; color: #fff; border-color: #dc2626; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (min-width: 640px) { .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 640px) { .form-grid.cols-4 { grid-template-columns: repeat(4, 1fr); } }
+
+  /* Charts */
+  .chart-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .svg-chart { width: 100%; height: 220px; display: block; }
+
+  /* Checklist */
+  .check-item {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-item input[type="checkbox"] { width: 19px; height: 19px; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+  .check-item.checked span { text-decoration: line-through; opacity: 0.6; }
+
+  .toast {
+    position: fixed; bottom: 86px; right: 16px; z-index: 100;
+    background: var(--header-bg); color: #fff; padding: 12px 16px;
+    border-radius: 10px; font-weight: 600; font-size: 0.88rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25); opacity: 0; pointer-events: none;
+    transform: translateY(10px); transition: all .25s;
+  }
+  .toast.show { opacity: 1; transform: none; }
+  @media (min-width: 820px) { .toast { bottom: 20px; } }
+
+  .sync-btn {
+    background: rgba(255,255,255,0.1); border: none; color: #fff;
+    height: 36px; padding: 0 11px; border-radius: 9px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.82rem; font-weight: 700; transition: background .15s;
+  }
+  .sync-btn:hover { background: rgba(255,255,255,0.2); }
+  .sync-btn.synced { background: rgba(34,197,94,0.25); color: #bbf7d0; }
+  .sync-btn.error { background: rgba(239,68,68,0.28); color: #fecaca; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; display: inline-block; }
+  .sync-btn.synced .sync-dot { background: #4ade80; }
+  .sync-btn.error .sync-dot { background: #f87171; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .spinning { display: inline-block; animation: spin 1s linear infinite; }
+  .gist-status-box {
+    padding: 10px 12px; border-radius: 9px; font-size: 0.84rem;
+    background: var(--surface-2); border: 1px solid var(--border);
+    margin-bottom: 12px; color: var(--text-muted);
+  }
+  .gist-status-box strong { color: var(--text); }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-badge">💪</div>
+      <span>Liegestütz-Planer</span>
+    </div>
+    <nav class="desktop-nav" aria-label="Hauptnavigation">
+      <button class="nav-btn active" data-tab="heute">Heute</button>
+      <button class="nav-btn" data-tab="training">Training</button>
+      <button class="nav-btn" data-tab="verlauf">Verlauf & Charts</button>
+      <button class="nav-btn" data-tab="plan">Plan & Ellbogen</button>
+      <button class="nav-btn" data-tab="daten">Daten & Setup</button>
+    </nav>
+    <div class="top-actions">
+      <button class="sync-btn" id="topSyncBtn" title="GitHub Gist Sync"><span class="sync-dot"></span><span id="topSyncIcon">☁️</span><span id="topSyncLabel">Sync</span></button>
+      <button class="icon-btn" id="themeToggle" title="Hell/Dunkel umschalten">🌙</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ==================== TAB 1: HEUTE (DASHBOARD) ==================== -->
+  <section id="tab-heute" class="tab-panel active">
+    <div class="page-head">
+      <div>
+        <h1>Übersicht</h1>
+        <div class="sub-meta" id="dashSubtitle">Stand: –</div>
+      </div>
+      <div class="goal-pills" id="dashGoalPills"></div>
+    </div>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div id="empfehlungBanner" class="banner green"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h2 style="font-size:1.05rem;">Nächste Einheit planen</h2>
+          <button class="btn btn-primary btn-sm" id="btnStartFromDash">Training starten →</button>
+        </div>
+        <label class="fld-lbl" for="dashBausteinSelect">Baustein wählen</label>
+        <select id="dashBausteinSelect"></select>
+        <div class="info-list" id="dashBausteinInfo"></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-title">
+          <span id="dashMiniChartTitle">Baustein-Verlauf</span>
+          <span class="badge badge-blue" id="dashPhaseBadge">Phase –</span>
+        </div>
+        <svg id="svgDashBaustein" class="svg-chart" viewBox="0 0 480 220"></svg>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1.05rem;margin-bottom:12px;">Bausteine im Überblick</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Baustein</th>
+              <th>Zweck</th>
+              <th class="num">Einh.</th>
+              <th class="num">28 T</th>
+              <th>Zuletzt</th>
+              <th class="num">Ø Pause</th>
+              <th class="num">Ø längster</th>
+              <th class="num">Bestwert</th>
+              <th class="num">Volumen</th>
+            </tr>
+          </thead>
+          <tbody id="dashBausteineBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 2: TRAINING (LIVE & SCHNELL-LOG) ==================== -->
+  <section id="tab-training" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Training erfassen</h1>
+        <div class="sub-meta">Live mit Timer & Satz-Tracker oder als Schnell-Log nachtragen</div>
+      </div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-tmode="live">⏱️ Live-Modus</button>
+        <button class="mode-tab" data-tmode="quick">📝 Schnell-Log</button>
+      </div>
+    </div>
+
+    <!-- LIVE MODE -->
+    <div id="training-live">
+      <div class="grid-2">
+        <!-- Left: Setup & Sets -->
+        <div class="card">
+          <label class="fld-lbl" for="liveBaustein">Baustein</label>
+          <select id="liveBaustein"></select>
+          <div id="liveVorschlagBox" style="margin:10px 0 14px;padding:10px 12px;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:0.9rem;"></div>
+
+          <div style="display:flex;gap:8px;align-items:flex-end;">
+            <div style="flex:1;">
+              <label class="fld-lbl" for="liveRepInput">Wiederholungen aktueller Satz</label>
+              <input type="number" id="liveRepInput" min="1" max="300" value="30">
+            </div>
+            <button class="btn btn-primary" id="btnAddSet" style="height:42px;">+ Satz abhaken</button>
+          </div>
+
+          <div class="set-chips" id="liveSetChips"></div>
+
+          <div style="display:flex;justify-content:space-between;font-size:0.86rem;color:var(--text-muted);padding:8px 0;border-top:1px solid var(--border);margin-top:6px;">
+            <span>Gesamt: <strong id="liveTotalReps" style="color:var(--text);">0</strong> Wdh. (<span id="liveSetCount">0</span> Sätze)</span>
+            <span>Längster: <strong id="liveMaxSet" style="color:var(--text);">0</strong></span>
+            <span>Dauer: <strong id="liveElapsed" style="color:var(--text);">0 Min</strong></span>
+          </div>
+        </div>
+
+        <!-- Right: Timer -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span class="fld-lbl" style="margin:0;">Timer-Modus</span>
+            <div class="mode-tabs" style="margin:0;">
+              <button class="mode-tab active" data-timermode="rest">Pause</button>
+              <button class="mode-tab" data-timermode="emom">EMOM/E2MOM</button>
+              <button class="mode-tab" data-timermode="density">Dichte/60m</button>
+            </div>
+          </div>
+
+          <div class="timer-box">
+            <div id="timerMeta" style="font-size:0.82rem;font-weight:700;color:var(--text-muted);">Satzpause-Countdown</div>
+            <div id="timerDisplay" class="timer-display">04:00</div>
+            <div id="timerSub" style="font-size:0.82rem;color:var(--text-muted);min-height:18px;">Startet automatisch beim Satz-Abhaken</div>
+
+            <div class="timer-controls">
+              <button class="btn btn-primary btn-sm" id="btnTimerStart">▶ Start</button>
+              <button class="btn btn-sm" id="btnTimerPause">⏸ Pause</button>
+              <button class="btn btn-sm" id="btnTimerReset">↺ Reset</button>
+              <button class="btn btn-sm" id="btnTimerMinus">-30s</button>
+              <button class="btn btn-sm" id="btnTimerPlus">+30s</button>
+            </div>
+
+            <div class="preset-row" id="timerPresets"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Finish & Save Card -->
+      <div class="card">
+        <h2 style="font-size:1rem;margin-bottom:12px;">Abschluss & Speichern</h2>
+        <div class="form-grid cols-4" style="margin-bottom:12px;">
+          <div>
+            <label class="fld-lbl" for="liveDatum">Datum</label>
+            <input type="date" id="liveDatum">
+          </div>
+          <div>
+            <label class="fld-lbl" for="liveUhrzeit">Uhrzeit</label>
+            <input type="time" id="liveUhrzeit">
+          </div>
+          <div>
+            <label class="fld-lbl" for="livePause">Satzpause (s)</label>
+            <input type="number" id="livePause" min="0" step="10" placeholder="z. B. 240">
+          </div>
+          <div>
+            <label class="fld-lbl" for="liveDauer">Dauer (Min)</label>
+            <input type="number" id="liveDauer" min="1" placeholder="auto">
+          </div>
+        </div>
+
+        <div class="form-grid cols-3" style="margin-bottom:12px;">
+          <div>
+            <label class="fld-lbl">RIR (letzter Satz)</label>
+            <div class="chip-group" id="liveRirChips"></div>
+          </div>
+          <div>
+            <label class="fld-lbl">Ellbogen (0–10)</label>
+            <div class="chip-group" id="liveEllbogenChips"></div>
+          </div>
+          <div class="form-grid">
+            <div>
+              <label class="fld-lbl" for="liveLast">Zusatzlast (kg)</label>
+              <input type="number" id="liveLast" min="0" step="0.5" placeholder="0">
+            </div>
+            <div>
+              <label class="fld-lbl" for="liveKlimm">Klimmzüge</label>
+              <input type="number" id="liveKlimm" min="0" placeholder="0">
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label class="fld-lbl" for="liveNotiz">Notiz</label>
+          <input type="text" id="liveNotiz" placeholder="z. B. Gefühl, Griffvariante, Test-Schätzung...">
+        </div>
+
+        <button class="btn btn-primary btn-lg" id="btnSaveLive">✅ Einheit im Protokoll speichern</button>
+      </div>
+    </div>
+
+    <!-- QUICK LOG MODE -->
+    <div id="training-quick" style="display:none;">
+      <div class="card">
+        <h2 style="font-size:1.05rem;margin-bottom:14px;">Einheit nachtragen</h2>
+        <div class="form-grid cols-4" style="margin-bottom:12px;">
+          <div><label class="fld-lbl" for="qDatum">Datum</label><input type="date" id="qDatum"></div>
+          <div><label class="fld-lbl" for="qUhrzeit">Uhrzeit</label><input type="time" id="qUhrzeit"></div>
+          <div style="grid-column:span 2;"><label class="fld-lbl" for="qBaustein">Baustein</label><select id="qBaustein"></select></div>
+        </div>
+        <div class="form-grid cols-4" style="margin-bottom:12px;">
+          <div><label class="fld-lbl" for="qSaetze">Sätze</label><input type="number" id="qSaetze" min="1" placeholder="z. B. 6"></div>
+          <div><label class="fld-lbl" for="qWdh">Wdh pro Satz</label><input type="number" id="qWdh" min="1" placeholder="z. B. 30"></div>
+          <div style="grid-column:span 2;"><label class="fld-lbl" for="qDetail">ODER Detail (z. B. 51-43-36-39-32)</label><input type="text" id="qDetail" placeholder="hat Vorrang vor Sätze × Wdh"></div>
+        </div>
+        <div class="form-grid cols-4" style="margin-bottom:12px;">
+          <div><label class="fld-lbl" for="qPause">Pause (s)</label><input type="number" id="qPause" min="0" step="10"></div>
+          <div><label class="fld-lbl" for="qDauer">Dauer (Min)</label><input type="number" id="qDauer" min="1"></div>
+          <div><label class="fld-lbl" for="qLast">Zusatzlast (kg)</label><input type="number" id="qLast" min="0" step="0.5"></div>
+          <div><label class="fld-lbl" for="qKlimm">Klimmzüge</label><input type="number" id="qKlimm" min="0"></div>
+        </div>
+        <div class="form-grid cols-3" style="margin-bottom:12px;">
+          <div>
+            <label class="fld-lbl" for="qRir">RIR</label>
+            <select id="qRir"><option value="">–</option><option>0</option><option>1–2</option><option>3–4</option><option>5+</option></select>
+          </div>
+          <div>
+            <label class="fld-lbl" for="qEllbogen">Ellbogen (0–10)</label>
+            <input type="number" id="qEllbogen" min="0" max="10" placeholder="0">
+          </div>
+          <div>
+            <label class="fld-lbl" for="qNotiz">Notiz</label>
+            <input type="text" id="qNotiz">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btnSaveQuick">💾 Einheit speichern</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 3: VERLAUF & CHARTS ==================== -->
+  <section id="tab-verlauf" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Verlauf & Protokoll</h1>
+        <div class="sub-meta" id="verlaufMeta">–</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="chart-title"><span>Max-Tests, alter Fahrplan & Prognose</span><span class="badge badge-blue">Ziel 1: 100</span></div>
+        <svg id="svgMaxChart" class="svg-chart" viewBox="0 0 480 220"></svg>
+      </div>
+      <div class="card">
+        <div class="chart-title"><span>Wochenvolumen (letzte 16 Wochen) & Grenze</span><span class="badge badge-amber">1,3× Limit</span></div>
+        <svg id="svgVolChart" class="svg-chart" viewBox="0 0 480 220"></svg>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="chart-title"><span>Ziel 2: Wiederholungen pro Minute (ab 15 Min)</span><span class="badge badge-green">Ziel: 16,7 / Min</span></div>
+      <svg id="svgDensityChart" class="svg-chart" viewBox="0 0 960 200"></svg>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="font-size:1.05rem;">Trainingsprotokoll</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <select id="filterBaustein" style="width:auto;min-width:170px;padding:7px 10px;font-size:0.85rem;"></select>
+          <input type="text" id="filterSearch" placeholder="Suche Notiz/Detail..." style="width:180px;padding:7px 10px;font-size:0.85rem;">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th>Wo</th>
+              <th>Baustein</th>
+              <th>Ausführung</th>
+              <th class="num">Pause</th>
+              <th class="num">Vol.</th>
+              <th class="num">Max</th>
+              <th class="num">W/m</th>
+              <th>RIR</th>
+              <th class="num">Ellb.</th>
+              <th>Notiz</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="protokollBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 4: PLAN & ELLBOGEN ==================== -->
+  <section id="tab-plan" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Fahrplan, Bausteine & Ellbogen</h1>
+        <div class="sub-meta">Phasen nach aktuellem Max (nicht nach Kalender) + tägliche Sehnen-Routine</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h2 style="font-size:1.05rem;margin-bottom:12px;">6-Phasen-Fahrplan</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Phase</th>
+              <th>Name</th>
+              <th class="num">Max-Bereich</th>
+              <th>Schwerpunkt</th>
+              <th class="num">Stundenziel</th>
+              <th>Wochenvolumen</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="fahrplanBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <h2 style="font-size:1.05rem;">Ellbogen-Protokoll (Tages-Checkliste)</h2>
+          <button class="btn btn-sm" id="btnResetChecklist">Zurücksetzen</button>
+        </div>
+        <div id="ellbogenChecklist"></div>
+        <div style="margin-top:12px;padding:10px 12px;border-radius:9px;background:var(--amber-bg);color:var(--amber-txt);font-size:0.84rem;">
+          <strong>Belastungsgrenze:</strong> Während der Übung max. 3/10 tolerabel. Ab 4/10 warnt das Dashboard → Pause oder nur leichter Baustein & Volumen der Folgewoche um 30 % reduzieren.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:1.05rem;margin-bottom:10px;">Wochenrahmen & Abstandsregeln</h2>
+        <ul style="padding-left:18px;font-size:0.88rem;display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+          <li><strong>3 bis 4 Einheiten</strong> in gleitenden 7 Tagen (4. Einheit immer leicht).</li>
+          <li>Jedes Ziel (Ziel 1 & Ziel 2) bekommt spätestens alle <strong>9 Tage</strong> seinen Reiz.</li>
+          <li>Nie zwei harte Einheiten an aufeinanderfolgenden Tagen.</li>
+          <li>7-Tage-Volumen bleibt unter dem <strong>1,3-Fachen</strong> des 4-Wochen-Schnitts davor.</li>
+          <li>Verpasste Einheiten werden nicht nachgeholt.</li>
+        </ul>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Abstand</th><th>Vorschlag</th></tr></thead>
+            <tbody>
+              <tr><td><strong>1 Tag</strong></td><td>Nur leichter Baustein, max. halbes Volumen.</td></tr>
+              <tr><td><strong>2–3 Tage</strong></td><td>Normalfall: volle Einheit, Steigerung erlaubt.</td></tr>
+              <tr><td><strong>4–6 Tage</strong></td><td>Volle Einheit vom letzten Mal. Ideal für Peak-Satz / Test.</td></tr>
+              <tr><td><strong>7–13 Tage</strong></td><td>Wiedereinstieg: -10 %, eine RIR-Stufe leichter, kein Test.</td></tr>
+              <tr><td><strong>ab 14 Tage</strong></td><td>Zwei Aufbaueinheiten mit ca. -25 %, dann neuer Max-Test.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1.05rem;margin-bottom:12px;">Bausteine-Katalog (Vorschlag für aktuelles Max)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Baustein</th>
+              <th>Zweck</th>
+              <th>Belastung</th>
+              <th>Ziel-RIR</th>
+              <th>Aktueller Vorschlag</th>
+            </tr>
+          </thead>
+          <tbody id="bausteineKatalogBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 5: DATEN & EINSTELLUNGEN ==================== -->
+  <section id="tab-daten" class="tab-panel">
+    <div class="page-head">
+      <div>
+        <h1>Daten & Einstellungen</h1>
+        <div class="sub-meta">Lokale Speicherung im Browser + Export/Import für Backup & Excel</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;border-top:3px solid var(--accent);">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;">
+        <h2 style="font-size:1.05rem;">☁️ GitHub Gist Sync (Option B – PC ↔ Handy)</h2>
+        <span class="badge badge-gray" id="gistBadge">Nicht eingerichtet</span>
+      </div>
+      <p style="font-size:0.86rem;color:var(--text-muted);margin-bottom:12px;">
+        Synchronisiert deine Trainingsdaten verschlüsselt über ein <strong>privates („Secret“) GitHub Gist</strong> zwischen PC und Smartphone. Dein Token wird ausschließlich lokal in diesem Browser gespeichert.
+      </p>
+
+      <div class="gist-status-box" id="gistStatusBox">Status: Noch kein GitHub-Token hinterlegt.</div>
+
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div>
+          <label class="fld-lbl" for="gistToken">GitHub Personal Access Token (Scope: gist)</label>
+          <input type="password" id="gistToken" placeholder="ghp_... oder github_pat_..." autocomplete="off">
+        </div>
+        <div>
+          <label class="fld-lbl" for="gistId">Gist-ID (leer lassen = automatisch erstellen/suchen)</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="gistId" placeholder="wird automatisch ausgefüllt">
+            <button class="btn btn-sm" id="btnCopyGistId" title="Gist-ID kopieren" type="button">📋</button>
+          </div>
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;margin-bottom:14px;cursor:pointer;">
+        <input type="checkbox" id="gistAutoSync" style="width:17px;height:17px;accent-color:var(--accent);">
+        <span><strong>Auto-Upload:</strong> Nach jedem Speichern/Löschen automatisch ins Gist hochladen</span>
+      </label>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnGistSync">🔄 Smart-Sync (Abgleichen)</button>
+        <button class="btn" id="btnGistPush">⬆️ Hochladen (Lokal → Gist)</button>
+        <button class="btn" id="btnGistPull">⬇️ Herunterladen (Gist → Lokal)</button>
+        <button class="btn" id="btnGistFind">🔍 Gist automatisch suchen</button>
+        <button class="btn btn-sm" id="btnSaveGistCfg">💾 Zugangsdaten merken</button>
+        <button class="btn btn-sm btn-danger" id="btnClearGistCfg">Trennen</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2 style="font-size:1.05rem;margin-bottom:12px;">Trainings-Parameter</h2>
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div><label class="fld-lbl" for="setStart">Startdatum</label><input type="date" id="setStart"></div>
+          <div><label class="fld-lbl" for="setWunsch">Wunschtermin Ziel 1</label><input type="date" id="setWunsch"></div>
+          <div><label class="fld-lbl" for="setZiel1">Ziel 1 (am Stück)</label><input type="number" id="setZiel1"></div>
+          <div><label class="fld-lbl" for="setZiel2">Ziel 2 (in 60 Min)</label><input type="number" id="setZiel2"></div>
+          <div><label class="fld-lbl" for="setBasisMax">Basis-Max</label><input type="number" id="setBasisMax"></div>
+          <div><label class="fld-lbl" for="setBasisDatum">Datum Basis-Max</label><input type="date" id="setBasisDatum"></div>
+          <div><label class="fld-lbl" for="setGrenzFaktor">Grenzfaktor (7T/4W)</label><input type="number" step="0.05" id="setGrenzFaktor"></div>
+          <div><label class="fld-lbl" for="setReizFrist">Reizfrist (Tage)</label><input type="number" id="setReizFrist"></div>
+          <div><label class="fld-lbl" for="setEllbogenWarn">Ellbogen-Warnung ab</label><input type="number" id="setEllbogenWarn"></div>
+          <div><label class="fld-lbl" for="setTestAbstand">Max-Test Abstand (Tage)</label><input type="number" id="setTestAbstand"></div>
+          <div style="grid-column:span 2;">
+            <label class="fld-lbl" for="setStichtag">Stichtag (optional – leer = heute)</label>
+            <input type="date" id="setStichtag">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btnSaveSettings">Einstellungen speichern</button>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:1.05rem;margin-bottom:12px;">Backup, Excel-Austausch & Reset</h2>
+        <p style="font-size:0.86rem;color:var(--text-muted);margin-bottom:14px;">
+          Deine Trainingsdaten werden automatisch lokal in diesem Browser (<code>localStorage</code>) gespeichert. Nutze JSON-Backup zum Sichern oder Übertragen zwischen PC und Handy.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button class="btn btn-primary" id="btnExportJSON">⬇️ JSON-Backup herunterladen</button>
+          <label class="btn" style="cursor:pointer;">
+            ⬆️ JSON-Backup einlesen
+            <input type="file" id="fileImportJSON" accept=".json" style="display:none;">
+          </label>
+          <button class="btn" id="btnExportCSV">📊 Protokoll als CSV (für Excel) exportieren</button>
+          <label class="btn" style="cursor:pointer;">
+            📥 Excel-Datei (.xlsx) importieren
+            <input type="file" id="fileImportXLSX" accept=".xlsx" style="display:none;">
+          </label>
+          <hr style="border:none;border-top:1px solid var(--border);margin:6px 0;">
+          <button class="btn btn-danger" id="btnResetStarter">↺ Auf Starterdaten (50 Einheiten) zurücksetzen</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Mobile Bottom Nav -->
+<nav class="mobile-nav" aria-label="Mobile Navigation">
+  <button class="mnav-btn active" data-tab="heute"><span class="ic">🏠</span>Heute</button>
+  <button class="mnav-btn" data-tab="training"><span class="ic">⏱️</span>Training</button>
+  <button class="mnav-btn" data-tab="verlauf"><span class="ic">📈</span>Verlauf</button>
+  <button class="mnav-btn" data-tab="plan"><span class="ic">🗺️</span>Plan</button>
+  <button class="mnav-btn" data-tab="daten"><span class="ic">⚙️</span>Daten</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================================
+// EMBEDDED STARTER DATA (50 sessions, 13 Bausteine, Fahrplan, Einstellungen)
+// ============================================================================
+const STARTER_DATA = {"einstellungen": {"start": "2026-07-27", "ziel1": 100, "ziel2": 1000, "basisMax": 30, "basisDatum": "2026-07-25", "wunschtermin": "2027-04-17", "grenzFaktor": 1.3, "reizFrist": 9, "ellbogenWarn": 4, "testAbstand": 28, "faktor7": 0.9, "faktor14": 0.75, "stichtag": ""}, "bausteine": [{"name": "Volumen", "zweck": "Ziel 1", "belastung": "mittel", "saetzeVon": 6, "saetzeBis": 8, "wdhAnteilVon": 0.5, "wdhAnteilBis": 0.6, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 180, "pauseBis": 240, "zielRIR": "3–4", "hinweis": "gleiche Sätze"}, {"name": "Peak-Satz + Nachsätze", "zweck": "Ziel 1", "belastung": "hart", "saetzeVon": 3, "saetzeBis": 4, "wdhAnteilVon": 0.65, "wdhAnteilBis": 0.7, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": 0.75, "ersterAnteilBis": 0.85, "pauseVon": 240, "pauseBis": 300, "zielRIR": "1–2", "hinweis": ""}, {"name": "Pyramide", "zweck": "Ziel 1", "belastung": "mittel", "saetzeVon": 5, "saetzeBis": 5, "wdhAnteilVon": 0.45, "wdhAnteilBis": 0.65, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 180, "pauseBis": 240, "zielRIR": "3–4", "hinweis": "auf- und absteigend"}, {"name": "Leiter", "zweck": "Ziel 1", "belastung": "mittel", "saetzeVon": 9, "saetzeBis": 11, "wdhAnteilVon": 0.15, "wdhAnteilBis": 0.6, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 60, "pauseBis": 90, "zielRIR": "3–4", "hinweis": "5er-Schritte hoch und zurück"}, {"name": "Kraft (Zusatzlast)", "zweck": "Ziel 1", "belastung": "hart", "saetzeVon": 5, "saetzeBis": 7, "wdhAnteilVon": null, "wdhAnteilBis": null, "wdhFixVon": 18, "wdhFixBis": 20, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 180, "pauseBis": 240, "zielRIR": "3–4", "hinweis": "Rucksack 10–14 kg"}, {"name": "EMOM", "zweck": "Ziel 2", "belastung": "hart", "saetzeVon": 20, "saetzeBis": 60, "wdhAnteilVon": 0.2, "wdhAnteilBis": 0.25, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": null, "pauseBis": null, "zielRIR": "3–4", "hinweis": "jede Minute, Sätze = Minuten"}, {"name": "E2MOM", "zweck": "Ziel 2", "belastung": "hart", "saetzeVon": 15, "saetzeBis": 30, "wdhAnteilVon": 0.4, "wdhAnteilBis": 0.45, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": null, "pauseBis": null, "zielRIR": "3–4", "hinweis": "alle 2 Minuten"}, {"name": "Dichte-Block", "zweck": "Ziel 2", "belastung": "hart", "saetzeVon": null, "saetzeBis": null, "wdhAnteilVon": null, "wdhAnteilBis": null, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": null, "pauseBis": null, "zielRIR": "1–2", "hinweis": "10–20 Minuten am Stück, Sätze frei"}, {"name": "Exzentrik", "zweck": "Leicht", "belastung": "leicht", "saetzeVon": 4, "saetzeBis": 6, "wdhAnteilVon": 0.25, "wdhAnteilBis": 0.35, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 120, "pauseBis": 150, "zielRIR": "5+", "hinweis": "3 s abwärts"}, {"name": "Technik / GtG", "zweck": "Leicht", "belastung": "leicht", "saetzeVon": 3, "saetzeBis": 4, "wdhAnteilVon": 0.4, "wdhAnteilBis": 0.45, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 90, "pauseBis": 120, "zielRIR": "5+", "hinweis": ""}, {"name": "Deload", "zweck": "Leicht", "belastung": "leicht", "saetzeVon": 3, "saetzeBis": 4, "wdhAnteilVon": 0.3, "wdhAnteilBis": 0.4, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": 150, "pauseBis": 180, "zielRIR": "5+", "hinweis": "vor Tests"}, {"name": "Max-Test", "zweck": "Ziel 1", "belastung": "hart", "saetzeVon": 1, "saetzeBis": 1, "wdhAnteilVon": null, "wdhAnteilBis": null, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": null, "pauseBis": null, "zielRIR": "0", "hinweis": "ein Satz bis zum Limit"}, {"name": "Stundentest", "zweck": "Ziel 2", "belastung": "sehr hart", "saetzeVon": null, "saetzeBis": null, "wdhAnteilVon": null, "wdhAnteilBis": null, "wdhFixVon": null, "wdhFixBis": null, "ersterAnteilVon": null, "ersterAnteilBis": null, "pauseVon": null, "pauseBis": null, "zielRIR": "1–2", "hinweis": "60 Minuten, Gesamtzahl eintragen"}], "phasen": [{"phase": 1, "name": "Sehnen-Reintegration", "maxVon": 30, "maxBis": 36, "schwerpunkt": "Technik, Exzentrik, kein Muskelversagen", "stundenziel": "–", "richtwertVolumen": "180–360"}, {"phase": 2, "name": "Volumenbasis", "maxVon": 36, "maxBis": 53, "schwerpunkt": "Volumen, erste Zusatzlast", "stundenziel": "–", "richtwertVolumen": "350–500"}, {"phase": 3, "name": "Kraftausdauer + Stundenbasis", "maxVon": 53, "maxBis": 65, "schwerpunkt": "Volumen, Peak-Satz, EMOM in Stufen bis 60 Minuten", "stundenziel": 650, "richtwertVolumen": "600–900"}, {"phase": 4, "name": "Maximalkraft + Stundenausbau", "maxVon": 65, "maxBis": 77, "schwerpunkt": "Wenige lange Sätze, Kraft mit 14–16 kg, EMOM 60 Minuten", "stundenziel": 800, "richtwertVolumen": "900–1150"}, {"phase": 5, "name": "Spezifische Maximalkraft + Stundendichte", "maxVon": 77, "maxBis": 89, "schwerpunkt": "Peak-Sätze über 80 %, E2MOM", "stundenziel": 920, "richtwertVolumen": "1100–1350"}, {"phase": 6, "name": "Peak und Taper", "maxVon": 89, "maxBis": 100, "schwerpunkt": "Generalprobe, Volumen senken, Finaltests", "stundenziel": 1000, "richtwertVolumen": "abnehmend"}], "alterFahrplan": [{"datum": "2026-07-25", "ziel": 30}, {"datum": "2026-08-22", "ziel": 36}, {"datum": "2026-09-18", "ziel": 52}, {"datum": "2026-10-17", "ziel": 58}, {"datum": "2026-11-14", "ziel": 63}, {"datum": "2026-12-12", "ziel": 68}, {"datum": "2027-01-09", "ziel": 73}, {"datum": "2027-02-06", "ziel": 79}, {"datum": "2027-03-06", "ziel": 85}, {"datum": "2027-04-03", "ziel": 93}, {"datum": "2027-04-17", "ziel": 100}], "protokoll": [{"id": 1, "datum": "2026-07-27", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 12, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 18, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "Liegestützgriffe, neutrale Handgelenke"}, {"id": 2, "datum": "2026-07-29", "uhrzeit": "", "baustein": "Exzentrik", "saetze": 4, "wdh": 12, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 16, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "3 s exzentrisch, zügig hoch"}, {"id": 3, "datum": "2026-08-01", "uhrzeit": "", "baustein": "Technik / GtG", "saetze": 5, "wdh": 14, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 15, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "im alten Plan: Dichte (Technik)"}, {"id": 4, "datum": "2026-08-04", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 16, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 18, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 5, "datum": "2026-08-06", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 13, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 6, "datum": "2026-08-08", "uhrzeit": "", "baustein": "Technik / GtG", "saetze": 6, "wdh": 14, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 10, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "im alten Plan: Dichte (Technik)"}, {"id": 7, "datum": "2026-08-09", "uhrzeit": "", "baustein": "Volumen", "saetze": 4, "wdh": 20, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 8, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 8, "datum": "2026-08-12", "uhrzeit": "", "baustein": "Exzentrik", "saetze": 7, "wdh": 15, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "3 s exzentrisch"}, {"id": 9, "datum": "2026-08-14", "uhrzeit": "", "baustein": "Volumen", "saetze": 3, "wdh": 25, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 8, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 10, "datum": "2026-08-16", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 20, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 11, "datum": "2026-08-18", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 20, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 12, "datum": "2026-08-20", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 22, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 13, "datum": "2026-08-22", "uhrzeit": "", "baustein": "Max-Test", "saetze": 1, "wdh": 47, "detail": "", "pause": null, "zusatzlast": null, "dauer": 10, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 14, "datum": "2026-08-24", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 25, "detail": "", "pause": 150, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 15, "datum": "2026-08-26", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 20, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 16, "datum": "2026-08-29", "uhrzeit": "", "baustein": "Volumen", "saetze": null, "wdh": null, "detail": "26-26-26-26-26-26-20", "pause": 210, "zusatzlast": null, "dauer": 24, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "letzter Satz mit 20, Pause ab 120 s, je Satz +30 s"}, {"id": 17, "datum": "2026-08-31", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 20, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 18, "datum": "2026-09-02", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 25, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 19, "datum": "2026-09-05", "uhrzeit": "", "baustein": "EMOM", "saetze": null, "wdh": null, "detail": "18-18-18-18-18-40", "pause": null, "zusatzlast": null, "dauer": 18, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": "im alten Plan: EMOM 6 Min, zusätzlich 40 Wdh. nach 5 Minuten"}, {"id": 20, "datum": "2026-09-07", "uhrzeit": "", "baustein": "EMOM", "saetze": 20, "wdh": 10, "detail": "", "pause": null, "zusatzlast": null, "dauer": 20, "rir": "", "ellbogen": null, "klimmzuege": 1, "notiz": ""}, {"id": 21, "datum": "2026-09-09", "uhrzeit": "", "baustein": "Volumen", "saetze": 5, "wdh": 22, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 8, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 22, "datum": "2026-09-11", "uhrzeit": "", "baustein": "Pyramide", "saetze": null, "wdh": null, "detail": "30-30-30-30-40", "pause": 150, "zusatzlast": null, "dauer": 17, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 23, "datum": "2026-09-14", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 22, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 13, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 24, "datum": "2026-09-16", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 25, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 14, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 25, "datum": "2026-09-18", "uhrzeit": "", "baustein": "Max-Test", "saetze": 1, "wdh": 53, "detail": "", "pause": null, "zusatzlast": null, "dauer": 10, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 26, "datum": "2026-09-21", "uhrzeit": "", "baustein": "Pyramide", "saetze": null, "wdh": null, "detail": "25-25-25-35-30", "pause": null, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 27, "datum": "2026-09-23", "uhrzeit": "", "baustein": "Volumen", "saetze": 8, "wdh": 25, "detail": "", "pause": 210, "zusatzlast": null, "dauer": 23, "rir": "", "ellbogen": null, "klimmzuege": null, "notiz": ""}, {"id": 28, "datum": "2026-09-26", "uhrzeit": "", "baustein": "Kraft (Zusatzlast)", "saetze": 5, "wdh": 20, "detail": "", "pause": 180, "zusatzlast": 8, "dauer": 20, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": "saubere Ausführung"}, {"id": 29, "datum": "2026-09-28", "uhrzeit": "", "baustein": "Kraft (Zusatzlast)", "saetze": null, "wdh": null, "detail": "21-21-21-21-21-21-27", "pause": 180, "zusatzlast": 8, "dauer": 30, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": "saubere Ausführung"}, {"id": 30, "datum": "2026-10-01", "uhrzeit": "", "baustein": "Kraft (Zusatzlast)", "saetze": null, "wdh": null, "detail": "21-21-21-21-21-21-28", "pause": 150, "zusatzlast": 9, "dauer": 27, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": "saubere Ausführung"}, {"id": 31, "datum": "2026-10-03", "uhrzeit": "", "baustein": "Volumen", "saetze": 8, "wdh": 25, "detail": "", "pause": 150, "zusatzlast": null, "dauer": 23, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 32, "datum": "2026-10-05", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 26, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 17, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 33, "datum": "2026-10-10", "uhrzeit": "", "baustein": "Volumen", "saetze": 10, "wdh": 30, "detail": "", "pause": 210, "zusatzlast": null, "dauer": 41, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 34, "datum": "2026-10-12", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 20, "detail": "", "pause": 90, "zusatzlast": null, "dauer": 10, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 35, "datum": "2026-10-15", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 30, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 17, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 36, "datum": "2026-10-17", "uhrzeit": "", "baustein": "Max-Test", "saetze": null, "wdh": null, "detail": "58-40-35-25-30", "pause": null, "zusatzlast": null, "dauer": 20, "rir": "", "ellbogen": null, "klimmzuege": 3, "notiz": "Max 58, danach Nachsätze"}, {"id": 37, "datum": "2026-10-19", "uhrzeit": "", "baustein": "Kraft (Zusatzlast)", "saetze": null, "wdh": null, "detail": "18-18-18-18-18-18-28", "pause": 180, "zusatzlast": 12, "dauer": 22, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 38, "datum": "2026-10-21", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 28, "detail": "", "pause": 120, "zusatzlast": null, "dauer": 12, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": "etwa 50 % vom Max (58)"}, {"id": 39, "datum": "2026-10-24", "uhrzeit": "", "baustein": "EMOM", "saetze": 25, "wdh": 12, "detail": "", "pause": null, "zusatzlast": null, "dauer": 35, "rir": "", "ellbogen": null, "klimmzuege": 0, "notiz": "im alten Plan als EMOM 35 Min betitelt, notiert sind 25 Sätze"}, {"id": 40, "datum": "2026-10-26", "uhrzeit": "", "baustein": "Peak-Satz + Nachsätze", "saetze": null, "wdh": null, "detail": "45-30-30-30-30", "pause": 240, "zusatzlast": null, "dauer": 20, "rir": "", "ellbogen": null, "klimmzuege": 3, "notiz": ""}, {"id": 41, "datum": "2026-10-28", "uhrzeit": "", "baustein": "Kraft (Zusatzlast)", "saetze": null, "wdh": null, "detail": "20-20-20-20-20-20-20-30-20", "pause": 180, "zusatzlast": 10.5, "dauer": 25, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 42, "datum": "2026-10-30", "uhrzeit": "", "baustein": "EMOM", "saetze": 27, "wdh": 13, "detail": "", "pause": null, "zusatzlast": null, "dauer": 27, "rir": "", "ellbogen": null, "klimmzuege": 3, "notiz": ""}, {"id": 43, "datum": "2026-11-02", "uhrzeit": "", "baustein": "Volumen", "saetze": 6, "wdh": 34, "detail": "", "pause": 240, "zusatzlast": null, "dauer": 26, "rir": "", "ellbogen": null, "klimmzuege": 3, "notiz": ""}, {"id": 44, "datum": "2026-11-06", "uhrzeit": "", "baustein": "Peak-Satz + Nachsätze", "saetze": null, "wdh": null, "detail": "46-40-40-40", "pause": 300, "zusatzlast": null, "dauer": 19, "rir": "", "ellbogen": null, "klimmzuege": 2, "notiz": ""}, {"id": 45, "datum": "2026-11-08", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 30, "detail": "", "pause": 180, "zusatzlast": null, "dauer": 28, "rir": "", "ellbogen": null, "klimmzuege": 1, "notiz": ""}, {"id": 46, "datum": "2026-11-10", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 32, "detail": "", "pause": 240, "zusatzlast": null, "dauer": 27, "rir": "", "ellbogen": null, "klimmzuege": 3, "notiz": "lange Pausen"}, {"id": 47, "datum": "2026-11-13", "uhrzeit": "", "baustein": "Volumen", "saetze": 7, "wdh": 32, "detail": "", "pause": 240, "zusatzlast": null, "dauer": 29, "rir": "3–4", "ellbogen": 0, "klimmzuege": 3, "notiz": "RIR ausgeführt. Letzter Satz 36 WH."}, {"id": 48, "datum": "2026-11-15", "uhrzeit": "16:45", "baustein": "Dichte-Block", "saetze": null, "wdh": null, "detail": "51-28-20-16-20-23-18-17-16-20", "pause": null, "zusatzlast": null, "dauer": 20, "rir": "1–2", "ellbogen": 1, "klimmzuege": 3, "notiz": ""}, {"id": 49, "datum": "2026-11-18", "uhrzeit": "14:40", "baustein": "Dichte-Block", "saetze": null, "wdh": null, "detail": "55-23-20-18-18-18-20-16-15-17-25", "pause": null, "zusatzlast": null, "dauer": 20, "rir": "1–2", "ellbogen": 0, "klimmzuege": 3, "notiz": ""}, {"id": 50, "datum": "2026-11-22", "uhrzeit": "12:00", "baustein": "Peak-Satz + Nachsätze", "saetze": null, "wdh": null, "detail": "51-43-36-39-32", "pause": 300, "zusatzlast": null, "dauer": 24, "rir": "1–2", "ellbogen": 0, "klimmzuege": 2, "notiz": ""}]};
+
+const RIR_RANG = { '0': 0, '1–2': 1, '1-2': 1, '3–4': 2, '3-4': 2, '5+': 3 };
+const STORAGE_KEY = 'pushup_planer_v1_state';
+const THEME_KEY = 'pushup_planer_theme';
+const CHECKLIST_KEY = 'pushup_planer_ellbogen_check';
+
+const ELLBOGEN_ITEMS = [
+  { id: 'pre1', title: 'Vor dem Training', text: 'Handgelenk-Kreisen, Unterarm-Dehnung Extensoren + Flexoren je 30 s (2 Durchgänge)' },
+  { id: 'pre2', title: 'Schulterstabilität', text: 'Scapula Push-ups 2 × 12 vor jeder Einheit' },
+  { id: 'pre3', title: 'Aufwärmsatz', text: '1 Satz Liegestütze mit ca. 40 % der Tageswiederholungen, langsam' },
+  { id: 'post1', title: 'Nach dem Training: Exzentrik', text: 'Handgelenksextension exzentrisch (3–4 s abwärts), 3 × 15 Wdh. (Kurzhantel / Flexbar)' },
+  { id: 'post2', title: 'Dehnung & Griffkraft', text: 'Unterarm-Dehnung je 30 s · optional 2 × 30 s Handtuch-/Ballgriff moderat' }
+];
+
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+let state = loadState();
+let selectedDashBaustein = 'Peak-Satz + Nachsätze';
+let liveSets = [];
+let liveStartTime = null;
+let liveRir = '';
+let liveEllbogen = 0;
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.protokoll) && Array.isArray(parsed.bausteine)) return parsed;
+    }
+  } catch (e) { console.warn('LocalStorage load failed', e); }
+  return JSON.parse(JSON.stringify(STARTER_DATA));
+}
+
+function saveState(skipAutoSync = false) {
+  state.updatedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!skipAutoSync && typeof maybeAutoPushGist === 'function') {
+    maybeAutoPushGist();
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// ============================================================================
+// DATE & MATH HELPERS
+// ============================================================================
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function parseDate(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function diffDays(d1Str, d2Str) {
+  const a = parseDate(d1Str), b = parseDate(d2Str);
+  if (!a || !b) return 0;
+  return Math.round((a - b) / 86400000);
+}
+function fmtDE(str) {
+  if (!str) return '–';
+  const [y, m, d] = str.split('-');
+  return `${d}.${m}.${y}`;
+}
+function fmtShortDE(str) {
+  if (!str) return '';
+  const [, m, d] = str.split('-');
+  return `${d}.${m}.`;
+}
+function addDaysStr(str, days) {
+  const d = parseDate(str);
+  d.setDate(d.getDate() + Math.round(days));
+  return toDateStr(d);
+}
+function getHeuteStr() {
+  return state.einstellungen.stichtag || toDateStr(new Date());
+}
+
+// ============================================================================
+// CORE CALCULATION ENGINE (1:1 Excel v4 Logic)
+// ============================================================================
+function getBausteinMap() {
+  const map = {};
+  state.bausteine.forEach(b => map[b.name] = b);
+  return map;
+}
+
+function parseDetail(detail) {
+  if (!detail || !String(detail).trim()) return null;
+  const parts = String(detail).split('-').map(x => Number(x.trim())).filter(x => !isNaN(x) && x >= 0);
+  return parts.length ? parts : null;
+}
+
+function enrichSessions(heuteStr) {
+  const bMap = getBausteinMap();
+  const sorted = [...state.protokoll].sort((a, b) => a.datum.localeCompare(b.datum) || (a.id - b.id));
+  const startStr = state.einstellungen.start;
+  const basisMax = Number(state.einstellungen.basisMax) || 30;
+
+  let prevDate = null;
+  let runningMax = basisMax;
+  const enriched = [];
+
+  for (const s of sorted) {
+    const b = bMap[s.baustein] || {};
+    const det = parseDetail(s.detail);
+    const volumen = det ? det.reduce((acc, v) => acc + v, 0) : (Number(s.saetze) || 0) * (Number(s.wdh) || 0);
+    const laengster = det ? Math.max(...det) : (Number(s.wdh) || 0);
+    const woche = Math.floor(diffDays(s.datum, startStr) / 7) + 1;
+    const abstand = prevDate && s.datum > prevDate ? diffDays(s.datum, prevDate) : null;
+    if (!prevDate || s.datum > prevDate) prevDate = s.datum;
+
+    // Max bisher = latest Max-Test strictly before s.datum
+    const maxBisher = runningMax;
+    const wdhProMin = (Number(s.dauer) > 0 && volumen > 0) ? volumen / Number(s.dauer) : null;
+
+    // RIR Urteil
+    let rirUrteil = '';
+    if (s.rir && b.zielRIR) {
+      const ist = RIR_RANG[s.rir], soll = RIR_RANG[b.zielRIR];
+      if (ist !== undefined && soll !== undefined) {
+        rirUrteil = ist < soll ? 'härter' : (ist > soll ? 'leichter' : 'im Ziel');
+      }
+    }
+
+    enriched.push({
+      ...s,
+      woche,
+      abstand,
+      volumen,
+      laengster,
+      wdhProMin,
+      zweck: b.zweck || '',
+      belastung: b.belastung || '',
+      maxBisher,
+      anteilMax: maxBisher > 0 ? laengster / maxBisher : null,
+      rirUrteil
+    });
+
+    if (s.baustein === 'Max-Test' && laengster > 0) {
+      runningMax = laengster;
+    }
+  }
+  return enriched;
+}
+
+function vorschlagText(bstName, mx, gap) {
+  const b = getBausteinMap()[bstName];
+  if (!b) return '';
+  const cfg = state.einstellungen;
+  const fak = (typeof gap === 'number') ? (gap >= 14 ? cfg.faktor14 : (gap >= 7 ? cfg.faktor7 : 1)) : 1;
+  const rg = (a, z) => (a === z ? `${a}` : `${a}–${z}`);
+
+  let erst = '';
+  if (b.ersterAnteilVon > 0) {
+    erst = `1 × ${rg(Math.round(mx * b.ersterAnteilVon * fak), Math.round(mx * b.ersterAnteilBis * fak))}, dann `;
+  }
+  const sz = b.saetzeVon > 0 ? `${rg(b.saetzeVon, b.saetzeBis)} × ` : '';
+  let wd = 'max';
+  if (b.wdhFixVon > 0) wd = rg(b.wdhFixVon, b.wdhFixBis);
+  else if (b.wdhAnteilVon > 0) wd = rg(Math.round(mx * b.wdhAnteilVon * fak), Math.round(mx * b.wdhAnteilBis * fak));
+
+  const pa = b.pauseVon > 0 ? ` · Pause ${rg(b.pauseVon, b.pauseBis)} s` : '';
+  const hw = b.hinweis ? ` · ${b.hinweis}` : '';
+  let zu = '';
+  if (typeof gap === 'number') {
+    if (gap >= 14) zu = ' · Wiedereinstieg: etwa 25 % weniger';
+    else if (gap >= 7) zu = ' · Wiedereinstieg: 10 % weniger';
+    else if (gap === 1 && b.belastung !== 'leicht') zu = ' · Folgetag: lieber leicht';
+  }
+  return `${erst}${sz}${wd}${pa}${hw}${zu}`;
+}
+
+function computeKPIs() {
+  const cfg = state.einstellungen;
+  const heute = getHeuteStr();
+  const all = enrichSessions(heute);
+  const valid = all.filter(s => s.datum <= heute);
+
+  const lastSession = valid.length ? valid[valid.length - 1] : null;
+  const letzteEinheit = lastSession ? lastSession.datum : null;
+  const tageSeit = letzteEinheit ? diffDays(heute, letzteEinheit) : null;
+  const belastungLetzte = lastSession ? lastSession.belastung : '';
+
+  const z1Sessions = valid.filter(s => s.zweck === 'Ziel 1');
+  const z2Sessions = valid.filter(s => s.zweck === 'Ziel 2');
+  const tageZ1 = z1Sessions.length ? diffDays(heute, z1Sessions[z1Sessions.length - 1].datum) : 999;
+  const tageZ2 = z2Sessions.length ? diffDays(heute, z2Sessions[z2Sessions.length - 1].datum) : 999;
+
+  const d7 = addDaysStr(heute, -7);
+  const d35 = addDaysStr(heute, -35);
+  const d28 = addDaysStr(heute, -28);
+
+  const last7 = valid.filter(s => s.datum > d7 && s.datum <= heute);
+  const volumen7 = last7.reduce((a, s) => a + s.volumen, 0);
+  const einh7 = last7.length;
+  const prev4w = valid.filter(s => s.datum > d35 && s.datum <= d7);
+  const schnitt4W = prev4w.reduce((a, s) => a + s.volumen, 0) / 4;
+  const verh = schnitt4W > 0 ? volumen7 / schnitt4W : null;
+  const grenze7 = schnitt4W * cfg.grenzFaktor;
+
+  // Max-Tests
+  const maxTests = valid.filter(s => s.baustein === 'Max-Test' && s.laengster > 0);
+  const lastTest = maxTests.length ? maxTests[maxTests.length - 1] : null;
+  const testDatum = lastTest ? lastTest.datum : cfg.basisDatum;
+  const aktMax = lastTest ? lastTest.laengster : cfg.basisMax;
+  const bestMax = Math.max(cfg.basisMax, ...maxTests.map(t => t.laengster));
+
+  const vglCutoff = addDaysStr(testDatum, -49);
+  const vglTests = maxTests.filter(t => t.datum <= vglCutoff);
+  const vglTest = vglTests.length ? vglTests[vglTests.length - 1] : null;
+  const vglDatum = vglTest ? vglTest.datum : cfg.basisDatum;
+  const vglWert = vglTest ? vglTest.laengster : cfg.basisMax;
+
+  const tempo = testDatum > vglDatum ? (aktMax - vglWert) / (diffDays(testDatum, vglDatum) / 7) : null;
+  let prognose = 'offen';
+  if (aktMax >= cfg.ziel1) prognose = 'erreicht';
+  else if (tempo && tempo > 0) prognose = addDaysStr(testDatum, ((cfg.ziel1 - aktMax) / tempo) * 7);
+
+  const naechsterTest = addDaysStr(testDatum, cfg.testAbstand);
+
+  // Ellbogen
+  const ellSessions = valid.filter(s => s.ellbogen !== null && s.ellbogen !== '' && !isNaN(Number(s.ellbogen)));
+  const letzterEllbogen = ellSessions.length ? Number(ellSessions[ellSessions.length - 1].ellbogen) : null;
+
+  // Ziel 2
+  const z2Long = valid.filter(s => s.zweck === 'Ziel 2' && Number(s.dauer) >= 20 && s.wdhProMin);
+  const bestDichte = z2Long.length ? Math.max(...z2Long.map(s => s.wdhProMin)) : 0;
+  const aktWoche = Math.floor(diffDays(heute, cfg.start) / 7) + 1;
+
+  // Empfehlung & Ampel
+  let empfehlung = '';
+  let ampel = 'green';
+  if (tageSeit === null) { empfehlung = 'Noch keine Einheit eingetragen.'; ampel = 'amber'; }
+  else if (tageSeit === 0) { empfehlung = 'Heute ist bereits eine Einheit eingetragen.'; ampel = 'green'; }
+  else if (letzterEllbogen !== null && letzterEllbogen >= cfg.ellbogenWarn) {
+    empfehlung = `Ellbogen zuletzt ${letzterEllbogen}/10: heute Pause oder nur ein leichter Baustein. Volumen der nächsten 7 Tage um 30 % senken.`;
+    ampel = 'red';
+  }
+  else if (einh7 >= 4) { empfehlung = 'Schon 4 Einheiten in 7 Tagen: heute Pause.'; ampel = 'red'; }
+  else if (tageSeit === 1 && (belastungLetzte === 'hart' || belastungLetzte === 'sehr hart')) {
+    empfehlung = 'Gestern war eine harte Einheit: heute Pause oder ein leichter Baustein.';
+    ampel = 'amber';
+  }
+  else if (grenze7 > 0 && volumen7 >= grenze7) {
+    empfehlung = `Volumen-Grenze der letzten 7 Tage erreicht (${Math.round(volumen7)} von ${Math.round(grenze7)}): nur ein leichter Baustein.`;
+    ampel = 'red';
+  }
+  else if (tageSeit >= 14) {
+    empfehlung = `Lange Pause (${tageSeit} Tage): zwei Aufbaueinheiten mit etwa 25 % weniger, dann neuer Max-Test.`;
+    ampel = 'amber';
+  }
+  else if (tageSeit >= 7) {
+    empfehlung = `Wiedereinstieg nach ${tageSeit} Tagen: Vorgaben minus 10 %, kein Test in der ersten Einheit.`;
+    ampel = 'amber';
+  }
+  else if (heute >= naechsterTest && tageSeit >= 2) {
+    empfehlung = 'Max-Test ist fällig. Ausgeruht antreten, am Vortag höchstens ein leichter Baustein.';
+    ampel = 'amber';
+  }
+  else if (tageZ2 > cfg.reizFrist && tageZ2 >= tageZ1) {
+    empfehlung = `Ziel-2-Reiz ist fällig (zuletzt vor ${tageZ2} Tagen): EMOM, E2MOM oder Dichte-Block.`;
+    ampel = 'amber';
+  }
+  else if (tageZ1 > cfg.reizFrist) {
+    empfehlung = `Ziel-1-Reiz ist fällig (zuletzt vor ${tageZ1} Tagen): Volumen, Pyramide, Peak-Satz oder Kraft.`;
+    ampel = 'amber';
+  }
+  else if (tageSeit === 1) {
+    empfehlung = 'Folgetag: möglich, wenn die letzte Einheit leicht war. Sonst lieber morgen.';
+    ampel = 'amber';
+  }
+  else {
+    empfehlung = `Freie Wahl. Abstand ${tageSeit} Tage: volle Einheit, Steigerung erlaubt.`;
+    ampel = 'green';
+  }
+
+  // Current phase
+  let aktPhase = state.phasen.find(p => aktMax >= p.maxVon && aktMax < p.maxBis) || state.phasen[state.phasen.length - 1];
+
+  return {
+    heute, valid, all, letzteEinheit, tageSeit, tageZ1, tageZ2,
+    volumen7, schnitt4W, verh, grenze7, einh7, d28,
+    aktMax, bestMax, testDatum, tempo, prognose, naechsterTest,
+    letzterEllbogen, bestDichte, aktWoche, empfehlung, ampel, maxTests, aktPhase
+  };
+}
+
+// ============================================================================
+// RENDER FUNCTIONS
+// ============================================================================
+const MONATE = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+
+function renderAll() {
+  const kpi = computeKPIs();
+  renderDashboard(kpi);
+  renderTrainingSelectors(kpi);
+  renderVerlauf(kpi);
+  renderPlan(kpi);
+  renderSettings();
+}
+
+function renderDashboard(kpi) {
+  const cfg = state.einstellungen;
+  document.getElementById('dashSubtitle').textContent = `Stand: ${fmtDE(kpi.heute)}  ·  Woche ${kpi.aktWoche}  ·  ${kpi.valid.length} Einheiten gesamt`;
+
+  const z1Pct = Math.round((kpi.aktMax / cfg.ziel1) * 100);
+  const z2Target = cfg.ziel2 / 60;
+  const z2Pct = Math.round((kpi.bestDichte / z2Target) * 100);
+  document.getElementById('dashGoalPills').innerHTML = `
+    <span class="pill">Ziel 1: ${z1Pct} % (${kpi.aktMax}/${cfg.ziel1})</span>
+    <span class="pill">Ziel 2 Dichte: ${z2Pct} % (${kpi.bestDichte.toFixed(1)}/${z2Target.toFixed(1)} W/m)</span>
+  `;
+
+  let progLabel = kpi.prognose;
+  if (kpi.prognose.includes('-')) {
+    const pd = parseDate(kpi.prognose);
+    progLabel = `${MONATE[pd.getMonth()]} ${pd.getFullYear()}`;
+  }
+  const loadPct = kpi.grenze7 > 0 ? Math.round((kpi.volumen7 / kpi.grenze7) * 100) : 0;
+  const loadClass = kpi.verh > cfg.grenzFaktor ? 'danger' : (loadPct >= 85 ? 'warn' : '');
+  const reizWarn = (kpi.tageZ1 > cfg.reizFrist || kpi.tageZ2 > cfg.reizFrist) ? 'warn' : '';
+  const tageLabel = kpi.tageSeit === null ? '–' : (kpi.tageSeit === 0 ? 'heute' : (kpi.tageSeit === 1 ? 'gestern' : `vor ${kpi.tageSeit} T`));
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="card kpi-card">
+      <div class="kpi-label">Aktuelles Max</div>
+      <div class="kpi-val-row"><span class="kpi-val">${kpi.aktMax}</span><span class="badge badge-blue">${z1Pct} %</span></div>
+      <div class="pbar"><div class="pbar-fill" style="width:${Math.min(100, z1Pct)}%"></div></div>
+      <div class="kpi-sub">Bestes Max ${kpi.bestMax} · Test ${fmtDE(kpi.testDatum)}</div>
+    </div>
+    <div class="card kpi-card">
+      <div class="kpi-label">Ziel 1 Prognose</div>
+      <div class="kpi-val-row"><span class="kpi-val" style="font-size:1.45rem;">${progLabel}</span></div>
+      <div class="kpi-sub" style="margin-top:auto;">${kpi.tempo ? `Tempo +${kpi.tempo.toFixed(1)} Wdh./Woche` : 'Noch zu wenige Tests'}</div>
+    </div>
+    <div class="card kpi-card ${loadClass}">
+      <div class="kpi-label">Volumen (7 Tage)</div>
+      <div class="kpi-val-row"><span class="kpi-val">${kpi.volumen7}</span><span class="badge ${loadClass==='danger'?'badge-red':(loadClass==='warn'?'badge-amber':'badge-gray')}">${loadPct} % Limit</span></div>
+      <div class="pbar"><div class="pbar-fill ${loadClass}" style="width:${Math.min(100, loadPct)}%"></div></div>
+      <div class="kpi-sub">${kpi.verh ? Math.round(kpi.verh*100) : 0} % vom 4W-Schnitt · Grenze ${Math.round(kpi.grenze7)}</div>
+    </div>
+    <div class="card kpi-card ${reizWarn}">
+      <div class="kpi-label">Letzte Einheit</div>
+      <div class="kpi-val-row"><span class="kpi-val" style="font-size:1.55rem;">${tageLabel}</span></div>
+      <div class="kpi-sub" style="margin-top:auto;">Ziel 1 vor ${kpi.tageZ1} T · Ziel 2 vor ${kpi.tageZ2} T</div>
+    </div>
+  `;
+
+  const banner = document.getElementById('empfehlungBanner');
+  banner.className = `banner ${kpi.ampel}`;
+  banner.innerHTML = `
+    <div>
+      <span class="banner-title">Tages-Empfehlung</span>
+      ${kpi.empfehlung}
+    </div>
+    <span class="badge ${kpi.ampel==='red'?'badge-red':(kpi.ampel==='amber'?'badge-amber':'badge-green')}">${kpi.ampel==='red'?'Schonen':(kpi.ampel==='amber'?'Hinweis':'Bereit')}</span>
+  `;
+
+  // Baustein Selector
+  const sel = document.getElementById('dashBausteinSelect');
+  sel.innerHTML = state.bausteine.map(b => `<option value="${b.name}" ${b.name === selectedDashBaustein ? 'selected' : ''}>${b.name} (${b.zweck})</option>`).join('');
+
+  const wbSessions = kpi.valid.filter(s => s.baustein === selectedDashBaustein);
+  const lastW = wbSessions.length ? wbSessions[wbSessions.length - 1] : null;
+  const vorschlag = vorschlagText(selectedDashBaustein, kpi.aktMax, kpi.tageSeit);
+
+  let lastText = 'Diesen Baustein hast du noch nicht protokolliert.';
+  let anpassung = '';
+  if (lastW) {
+    const perf = lastW.detail ? lastW.detail : `${lastW.saetze || ''} × ${lastW.wdh || ''}`;
+    const pTxt = lastW.pause > 0 ? ` · Pause ${lastW.pause} s` : '';
+    const lTxt = lastW.zusatzlast > 0 ? ` · ${lastW.zusatzlast} kg` : '';
+    const rTxt = lastW.rir ? ` · RIR ${lastW.rir}` : ' · kein RIR';
+    lastText = `${fmtDE(lastW.datum)}: <strong>${perf}</strong>${pTxt}${lTxt}${rTxt}`;
+    if (lastW.rirUrteil === 'leichter') anpassung = 'Letztes Mal leichter als geplant: 1–2 Wdh. mehr pro Satz.';
+    else if (lastW.rirUrteil === 'härter') anpassung = 'Letztes Mal härter als geplant: Vorgabe halten, Pause eher verlängern.';
+    else if (lastW.rirUrteil === 'im Ziel') anpassung = 'Letztes Mal im Ziel: wie vorgeschlagen, Steigerung nach Gefühl.';
+    else anpassung = 'Ohne RIR-Eintrag keine Anpassung – RIR ab jetzt mit eintragen.';
+  }
+
+  const testStatus = kpi.heute >= kpi.naechsterTest
+    ? `<span class="badge badge-amber">Fällig seit ${fmtDE(kpi.naechsterTest)}</span>`
+    : `Nächster Test ab ${fmtDE(kpi.naechsterTest)}`;
+
+  document.getElementById('dashBausteinInfo').innerHTML = `
+    <div class="info-row"><span class="k">Vorschlag</span><span class="v"><strong>${vorschlag}</strong></span></div>
+    <div class="info-row"><span class="k">Letztes Mal</span><span class="v">${lastText}</span></div>
+    ${anpassung ? `<div class="info-row"><span class="k">Anpassung</span><span class="v">${anpassung}</span></div>` : ''}
+    <div class="info-row"><span class="k">Max-Test</span><span class="v">${testStatus} · letzter: ${kpi.aktMax} (${fmtDE(kpi.testDatum)})</span></div>
+  `;
+
+  document.getElementById('dashMiniChartTitle').textContent = `Letzte Einheiten „${selectedDashBaustein}“`;
+  document.getElementById('dashPhaseBadge').textContent = `Phase ${kpi.aktPhase.phase}: ${kpi.aktPhase.name}`;
+  drawBausteinChart(wbSessions.slice(-10));
+
+  // Bausteine summary table
+  const tbody = document.getElementById('dashBausteineBody');
+  tbody.innerHTML = state.bausteine.map(b => {
+    const list = kpi.valid.filter(s => s.baustein === b.name);
+    const list28 = list.filter(s => s.datum > kpi.d28);
+    const lastD = list.length ? fmtDE(list[list.length - 1].datum) : '–';
+    const pauses = list.map(s => Number(s.pause)).filter(x => x > 0);
+    const avgP = pauses.length ? Math.round(pauses.reduce((a, v) => a + v, 0) / pauses.length) + ' s' : '–';
+    const longs = list.map(s => s.laengster).filter(x => x > 0);
+    const avgL = longs.length ? (longs.reduce((a, v) => a + v, 0) / longs.length).toFixed(1) : '–';
+    const bestL = longs.length ? Math.max(...longs) : '–';
+    const vol = list.reduce((a, s) => a + s.volumen, 0);
+    const zBadge = b.zweck === 'Ziel 1' ? 'badge-blue' : (b.zweck === 'Ziel 2' ? 'badge-green' : 'badge-gray');
+    return `
+      <tr>
+        <td><strong>${b.name}</strong></td>
+        <td><span class="badge ${zBadge}">${b.zweck}</span></td>
+        <td class="num">${list.length}</td>
+        <td class="num">${list28.length}</td>
+        <td>${lastD}</td>
+        <td class="num">${avgP}</td>
+        <td class="num">${avgL}</td>
+        <td class="num"><strong>${bestL}</strong></td>
+        <td class="num">${vol.toLocaleString('de-DE')}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ============================================================================
+// SVG CHARTS (Zero external dependency, dark-mode native)
+// ============================================================================
+function drawBausteinChart(items) {
+  const svg = document.getElementById('svgDashBaustein');
+  if (!items.length) {
+    svg.innerHTML = `<text x="240" y="110" text-anchor="middle" fill="var(--text-muted)" font-size="13">Noch keine Einheiten für diesen Baustein</text>`;
+    return;
+  }
+  const W = 480, H = 220, padL = 36, padR = 36, padT = 20, padB = 34;
+  const maxL = Math.max(10, ...items.map(i => i.laengster)) * 1.15;
+  const maxP = Math.max(60, ...items.map(i => Number(i.pause) || 0)) * 1.15;
+  const step = (W - padL - padR) / items.length;
+  const bw = Math.min(28, step * 0.55);
+
+  let html = '';
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (H - padT - padB) * (i / 4);
+    const val = Math.round(maxL * (1 - i / 4));
+    html += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--border)" stroke-dasharray="3,3"/>`;
+    html += `<text x="${padL-6}" y="${y+4}" text-anchor="end" fill="var(--text-muted)" font-size="10">${val}</text>`;
+  }
+
+  let pausePts = [];
+  items.forEach((it, idx) => {
+    const cx = padL + step * idx + step / 2;
+    const bh = (it.laengster / maxL) * (H - padT - padB);
+    const y = H - padB - bh;
+    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="4" fill="var(--accent)" opacity="0.88"/>`;
+    html += `<text x="${cx}" y="${y-5}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${it.laengster}</text>`;
+    html += `<text x="${cx}" y="${H-14}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${fmtShortDE(it.datum)}</text>`;
+    if (Number(it.pause) > 0) {
+      const py = H - padB - (Number(it.pause) / maxP) * (H - padT - padB);
+      pausePts.push(`${cx},${py}`);
+    }
+  });
+  if (pausePts.length > 1) {
+    html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.5" points="${pausePts.join(' ')}"/>`;
+  }
+  pausePts.forEach(pt => {
+    const [x, y] = pt.split(',');
+    html += `<circle cx="${x}" cy="${y}" r="3.5" fill="#f59e0b"/>`;
+  });
+  html += `<text x="${W-padR}" y="12" text-anchor="end" fill="#f59e0b" font-size="10" font-weight="700">● Pause (s)</text>`;
+  html += `<text x="${padL}" y="12" text-anchor="start" fill="var(--accent)" font-size="10" font-weight="700">■ Längster Satz</text>`;
+  svg.innerHTML = html;
+}
+
+function drawMaxChart(kpi) {
+  const svg = document.getElementById('svgMaxChart');
+  const cfg = state.einstellungen;
+  const W = 480, H = 220, padL = 36, padR = 16, padT = 18, padB = 30;
+  const startMs = parseDate(cfg.basisDatum).getTime();
+  const endStr = (kpi.prognose.includes('-') && kpi.prognose > cfg.wunschtermin) ? kpi.prognose : cfg.wunschtermin;
+  const endMs = parseDate(addDaysStr(endStr, 14)).getTime();
+  const maxY = Math.max(cfg.ziel1 + 5, kpi.bestMax + 10);
+
+  const sx = dStr => padL + ((parseDate(dStr).getTime() - startMs) / (endMs - startMs)) * (W - padL - padR);
+  const sy = v => H - padB - (v / maxY) * (H - padT - padB);
+
+  let html = '';
+  [0, 25, 50, 75, 100].forEach(v => {
+    const y = sy(v);
+    html += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${v===cfg.ziel1?'#16a34a':'var(--border)'}" stroke-dasharray="${v===cfg.ziel1?'5,4':'2,3'}"/>`;
+    html += `<text x="${padL-6}" y="${y+4}" text-anchor="end" fill="var(--text-muted)" font-size="10">${v}</text>`;
+  });
+
+  // Alter Fahrplan
+  if (state.alterFahrplan && state.alterFahrplan.length) {
+    const pts = state.alterFahrplan.map(p => `${sx(p.datum)},${sy(p.ziel)}`).join(' ');
+    html += `<polyline fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6" points="${pts}"/>`;
+  }
+
+  // Real Max-Tests
+  const testPts = [{ datum: cfg.basisDatum, val: cfg.basisMax }, ...kpi.maxTests.map(t => ({ datum: t.datum, val: t.laengster }))];
+  const poly = testPts.map(p => `${sx(p.datum)},${sy(p.val)}`).join(' ');
+  html += `<polyline fill="none" stroke="var(--accent)" stroke-width="2.8" points="${poly}"/>`;
+  testPts.forEach(p => {
+    html += `<circle cx="${sx(p.datum)}" cy="${sy(p.val)}" r="4" fill="var(--accent)"/>`;
+    html += `<text x="${sx(p.datum)}" y="${sy(p.val)-8}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${p.val}</text>`;
+  });
+
+  // Prognose line
+  if (kpi.prognose.includes('-')) {
+    html += `<line x1="${sx(kpi.testDatum)}" y1="${sy(kpi.aktMax)}" x2="${sx(kpi.prognose)}" y2="${sy(cfg.ziel1)}" stroke="#16a34a" stroke-width="2" stroke-dasharray="5,3"/>`;
+    html += `<circle cx="${sx(kpi.prognose)}" cy="${sy(cfg.ziel1)}" r="4" fill="#16a34a"/>`;
+  }
+
+  html += `<text x="${padL}" y="${H-8}" fill="var(--text-muted)" font-size="10">${fmtShortDE(cfg.basisDatum)}</text>`;
+  html += `<text x="${W-padR}" y="${H-8}" text-anchor="end" fill="var(--text-muted)" font-size="10">${fmtDE(endStr)}</text>`;
+  svg.innerHTML = html;
+}
+
+function drawVolChart(kpi) {
+  const svg = document.getElementById('svgVolChart');
+  const cfg = state.einstellungen;
+  const W = 480, H = 220, padL = 40, padR = 14, padT = 18, padB = 30;
+  const weeks = [];
+  for (let w = Math.max(1, kpi.aktWoche - 15); w <= kpi.aktWoche; w++) {
+    const vol = kpi.valid.filter(s => s.woche === w).reduce((a, s) => a + s.volumen, 0);
+    let grenze = null;
+    if (w >= 5) {
+      const prev4 = kpi.valid.filter(s => s.woche >= w - 4 && s.woche < w).reduce((a, s) => a + s.volumen, 0);
+      grenze = (prev4 / 4) * cfg.grenzFaktor;
+    }
+    weeks.push({ w, vol, grenze });
+  }
+  const maxY = Math.max(200, ...weeks.map(x => Math.max(x.vol, x.grenze || 0))) * 1.12;
+  const step = (W - padL - padR) / weeks.length;
+  const bw = Math.min(20, step * 0.65);
+
+  let html = '';
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (H - padT - padB) * (i / 4);
+    const val = Math.round(maxY * (1 - i / 4));
+    html += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--border)" stroke-dasharray="2,3"/>`;
+    html += `<text x="${padL-6}" y="${y+4}" text-anchor="end" fill="var(--text-muted)" font-size="10">${val}</text>`;
+  }
+
+  let gPts = [];
+  weeks.forEach((wk, idx) => {
+    const cx = padL + step * idx + step / 2;
+    const bh = (wk.vol / maxY) * (H - padT - padB);
+    const y = H - padB - bh;
+    const over = wk.grenze && wk.vol > wk.grenze;
+    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${over ? '#ef4444' : 'var(--accent)'}" opacity="0.85"/>`;
+    if (idx % 2 === 0 || idx === weeks.length - 1) {
+      html += `<text x="${cx}" y="${H-10}" text-anchor="middle" fill="var(--text-muted)" font-size="9.5">W${wk.w}</text>`;
+    }
+    if (wk.grenze) {
+      const gy = H - padB - (wk.grenze / maxY) * (H - padT - padB);
+      gPts.push(`${cx},${gy}`);
+    }
+  });
+  if (gPts.length > 1) {
+    html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="5,3" points="${gPts.join(' ')}"/>`;
+  }
+  svg.innerHTML = html;
+}
+
+function drawDensityChart(kpi) {
+  const svg = document.getElementById('svgDensityChart');
+  const items = kpi.valid.filter(s => s.zweck === 'Ziel 2' && Number(s.dauer) >= 15 && s.wdhProMin).slice(-14);
+  const target = state.einstellungen.ziel2 / 60;
+  if (!items.length) {
+    svg.innerHTML = `<text x="480" y="100" text-anchor="middle" fill="var(--text-muted)" font-size="13">Noch keine Ziel-2-Einheiten ab 15 Minuten</text>`;
+    return;
+  }
+  const W = 960, H = 200, padL = 42, padR = 24, padT = 20, padB = 30;
+  const maxY = Math.max(target + 2, ...items.map(i => i.wdhProMin)) * 1.08;
+  const step = (W - padL - padR) / items.length;
+  const bw = Math.min(40, step * 0.55);
+
+  let html = '';
+  const ty = H - padB - (target / maxY) * (H - padT - padB);
+  html += `<line x1="${padL}" y1="${ty}" x2="${W-padR}" y2="${ty}" stroke="#16a34a" stroke-width="2" stroke-dasharray="6,4"/>`;
+  html += `<text x="${W-padR}" y="${ty-6}" text-anchor="end" fill="#16a34a" font-size="11" font-weight="700">Ziel 2: ${target.toFixed(1)} Wdh./Min</text>`;
+
+  items.forEach((it, idx) => {
+    const cx = padL + step * idx + step / 2;
+    const bh = (it.wdhProMin / maxY) * (H - padT - padB);
+    const y = H - padB - bh;
+    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="5" fill="var(--accent)" opacity="0.88"/>`;
+    html += `<text x="${cx}" y="${y-6}" text-anchor="middle" fill="var(--text)" font-size="11" font-weight="700">${it.wdhProMin.toFixed(1)}</text>`;
+    html += `<text x="${cx}" y="${H-10}" text-anchor="middle" fill="var(--text-muted)" font-size="10.5">${fmtShortDE(it.datum)} (${it.baustein})</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+// ============================================================================
+// VERLAUF & PROTOKOL TABLE
+// ============================================================================
+function renderVerlauf(kpi) {
+  const totalVol = kpi.valid.reduce((a, s) => a + s.volumen, 0);
+  document.getElementById('verlaufMeta').textContent = `${kpi.valid.length} Einheiten · ${totalVol.toLocaleString('de-DE')} Liegestütze gesamt`;
+  drawMaxChart(kpi);
+  drawVolChart(kpi);
+  drawDensityChart(kpi);
+
+  const fSel = document.getElementById('filterBaustein');
+  const prevVal = fSel.value;
+  fSel.innerHTML = `<option value="">Alle Bausteine</option>` + state.bausteine.map(b => `<option value="${b.name}" ${prevVal===b.name?'selected':''}>${b.name}</option>`).join('');
+  renderProtokollTable(kpi.all);
+}
+
+function renderProtokollTable(allEnriched) {
+  const fBst = document.getElementById('filterBaustein').value;
+  const fTxt = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const rows = [...allEnriched].reverse().filter(s => {
+    if (fBst && s.baustein !== fBst) return false;
+    if (fTxt && !`${s.notiz} ${s.detail} ${s.baustein} ${s.datum}`.toLowerCase().includes(fTxt)) return false;
+    return true;
+  });
+
+  document.getElementById('protokollBody').innerHTML = rows.map(s => {
+    const ausf = s.detail ? s.detail : `${s.saetze || ''} × ${s.wdh || ''}`;
+    const ellWarn = (s.ellbogen !== null && s.ellbogen !== '' && Number(s.ellbogen) >= state.einstellungen.ellbogenWarn);
+    const rirBadge = s.rirUrteil === 'im Ziel' ? 'badge-green' : (s.rirUrteil === 'härter' ? 'badge-amber' : 'badge-gray');
+    const isTest = s.baustein === 'Max-Test' || s.baustein === 'Stundentest';
+    return `
+      <tr style="${isTest ? 'background:var(--accent-soft);' : ''}">
+        <td style="white-space:nowrap;"><strong>${fmtDE(s.datum)}</strong></td>
+        <td class="num">${s.woche}</td>
+        <td><strong>${s.baustein}</strong>${s.zusatzlast ? ` <span class="badge badge-gray">+${s.zusatzlast}kg</span>` : ''}</td>
+        <td style="font-family:monospace;font-size:0.84rem;">${ausf}</td>
+        <td class="num">${s.pause ? s.pause + 's' : '–'}</td>
+        <td class="num"><strong>${s.volumen}</strong></td>
+        <td class="num">${s.laengster}</td>
+        <td class="num">${s.wdhProMin ? s.wdhProMin.toFixed(1) : '–'}</td>
+        <td>${s.rir ? `<span class="badge ${rirBadge}">${s.rir}</span>` : '–'}</td>
+        <td class="num">${s.ellbogen !== null && s.ellbogen !== '' ? (ellWarn ? `<span class="badge badge-red">${s.ellbogen}</span>` : s.ellbogen) : '–'}</td>
+        <td style="max-width:200px;color:var(--text-muted);font-size:0.82rem;">${s.notiz || ''}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})" title="Löschen">✕</button></td>
+      </tr>`;
+  }).join('');
+}
+
+window.deleteSession = function(id) {
+  if (!confirm('Diese Trainingseinheit wirklich löschen?')) return;
+  state.protokoll = state.protokoll.filter(s => s.id !== id);
+  saveState();
+  renderAll();
+  showToast('Einheit gelöscht.');
+};
+
+// ============================================================================
+// PLAN & ELLBOGEN TAB
+// ============================================================================
+function renderPlan(kpi) {
+  document.getElementById('fahrplanBody').innerHTML = state.phasen.map(p => {
+    const st = kpi.aktMax >= p.maxBis ? 'abgeschlossen' : (kpi.aktMax >= p.maxVon ? 'aktuell' : 'offen');
+    const bCls = st === 'aktuell' ? 'badge-blue' : (st === 'abgeschlossen' ? 'badge-green' : 'badge-gray');
+    return `
+      <tr style="${st==='aktuell'?'background:var(--accent-soft);':''}">
+        <td><strong>${p.phase}</strong></td>
+        <td><strong>${p.name}</strong></td>
+        <td class="num">${p.maxVon}–${p.maxBis}</td>
+        <td>${p.schwerpunkt}</td>
+        <td class="num">${p.stundenziel}</td>
+        <td>${p.richtwertVolumen}</td>
+        <td><span class="badge ${bCls}">${st}</span></td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('bausteineKatalogBody').innerHTML = state.bausteine.map(b => `
+    <tr>
+      <td><strong>${b.name}</strong></td>
+      <td>${b.zweck}</td>
+      <td>${b.belastung}</td>
+      <td>${b.zielRIR || '–'}</td>
+      <td>${vorschlagText(b.name, kpi.aktMax, null)}</td>
+    </tr>`).join('');
+
+  // Ellbogen Checklist
+  const checked = JSON.parse(localStorage.getItem(CHECKLIST_KEY) || '{}');
+  document.getElementById('ellbogenChecklist').innerHTML = ELLBOGEN_ITEMS.map(it => `
+    <label class="check-item ${checked[it.id] ? 'checked' : ''}">
+      <input type="checkbox" ${checked[it.id] ? 'checked' : ''} onchange="toggleEllbogenCheck('${it.id}', this.checked)">
+      <span><strong>${it.title}:</strong> ${it.text}</span>
+    </label>`).join('');
+}
+
+window.toggleEllbogenCheck = function(id, val) {
+  const checked = JSON.parse(localStorage.getItem(CHECKLIST_KEY) || '{}');
+  checked[id] = val;
+  localStorage.setItem(CHECKLIST_KEY, JSON.stringify(checked));
+  renderPlan(computeKPIs());
+};
+
+// ============================================================================
+// TRAINING: LIVE TRACKER & TIMER ENGINE
+// ============================================================================
+let timerMode = 'rest'; // rest | emom | density
+let timerSec = 240;
+let timerInitial = 240;
+let timerInterval = null;
+let emomIntervalLen = 60;
+let emomRound = 1;
+let emomTotalRounds = 20;
+
+function playBeep(freq = 880, dur = 0.18, count = 1) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    for (let i = 0; i < count; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.2;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const t0 = ctx.currentTime + i * (dur + 0.08);
+      osc.start(t0);
+      osc.stop(t0 + dur);
+    }
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate(count > 1 ? [180, 90, 180] : 150);
+}
+
+function fmtMMSS(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
+function updateTimerUI() {
+  const disp = document.getElementById('timerDisplay');
+  disp.textContent = fmtMMSS(timerSec);
+  disp.className = 'timer-display' + (timerInterval ? ' running' : (timerSec === 0 ? ' done' : ''));
+  const sub = document.getElementById('timerSub');
+  if (timerMode === 'emom') {
+    sub.textContent = `Runde ${emomRound} von ${emomTotalRounds} · Intervall ${emomIntervalLen}s`;
+  } else if (timerMode === 'density') {
+    const reps = liveSets.reduce((a, v) => a + v, 0);
+    const elapsedMin = Math.max(0.5, (timerInitial - timerSec) / 60);
+    sub.textContent = `Aktuelle Dichte: ${(reps / elapsedMin).toFixed(1)} Wdh./Min`;
+  } else {
+    sub.textContent = timerInterval ? 'Satzpause läuft…' : 'Startet automatisch beim Satz-Abhaken';
+  }
+}
+
+function setTimerMode(mode) {
+  stopTimer();
+  timerMode = mode;
+  document.querySelectorAll('[data-timermode]').forEach(b => b.classList.toggle('active', b.dataset.timermode === mode));
+  const presets = document.getElementById('timerPresets');
+  const meta = document.getElementById('timerMeta');
+
+  if (mode === 'rest') {
+    meta.textContent = 'Satzpause-Countdown';
+    timerInitial = Number(document.getElementById('livePause').value) || 240;
+    timerSec = timerInitial;
+    presets.innerHTML = [90, 120, 150, 180, 240, 300].map(s => `<button class="btn btn-sm" onclick="setRestPreset(${s})">${s}s</button>`).join('');
+  } else if (mode === 'emom') {
+    meta.textContent = 'EMOM / E2MOM Intervall-Taktgeber';
+    emomRound = 1;
+    emomIntervalLen = document.getElementById('liveBaustein').value === 'E2MOM' ? 120 : 60;
+    emomTotalRounds = 20;
+    timerInitial = emomIntervalLen;
+    timerSec = emomIntervalLen;
+    presets.innerHTML = `
+      <button class="btn btn-sm" onclick="setEmomPreset(60,20)">EMOM 20m</button>
+      <button class="btn btn-sm" onclick="setEmomPreset(60,30)">EMOM 30m</button>
+      <button class="btn btn-sm" onclick="setEmomPreset(60,40)">EMOM 40m</button>
+      <button class="btn btn-sm" onclick="setEmomPreset(120,20)">E2MOM 40m</button>`;
+  } else {
+    meta.textContent = 'Dichte-Block / Stundentest Countdown';
+    timerInitial = document.getElementById('liveBaustein').value === 'Stundentest' ? 3600 : 1200;
+    timerSec = timerInitial;
+    presets.innerHTML = `
+      <button class="btn btn-sm" onclick="setDensityPreset(600)">10 Min</button>
+      <button class="btn btn-sm" onclick="setDensityPreset(900)">15 Min</button>
+      <button class="btn btn-sm" onclick="setDensityPreset(1200)">20 Min</button>
+      <button class="btn btn-sm" onclick="setDensityPreset(3600)">60 Min</button>`;
+  }
+  updateTimerUI();
+}
+
+window.setRestPreset = s => { stopTimer(); timerInitial = s; timerSec = s; document.getElementById('livePause').value = s; updateTimerUI(); };
+window.setEmomPreset = (iv, rds) => { stopTimer(); emomIntervalLen = iv; emomTotalRounds = rds; emomRound = 1; timerInitial = iv; timerSec = iv; updateTimerUI(); };
+window.setDensityPreset = s => { stopTimer(); timerInitial = s; timerSec = s; document.getElementById('liveDauer').value = Math.round(s/60); updateTimerUI(); };
+
+function startTimer() {
+  if (timerInterval) return;
+  if (!liveStartTime) liveStartTime = Date.now();
+  timerInterval = setInterval(() => {
+    if (timerSec > 1) {
+      timerSec--;
+      if (timerSec <= 3 && timerSec > 0) playBeep(520, 0.08, 1);
+      updateTimerUI();
+    } else {
+      if (timerMode === 'emom' && emomRound < emomTotalRounds) {
+        emomRound++;
+        timerSec = emomIntervalLen;
+        playBeep(880, 0.16, 2);
+        updateTimerUI();
+      } else {
+        timerSec = 0;
+        stopTimer();
+        playBeep(1040, 0.22, 3);
+        updateTimerUI();
+      }
+    }
+  }, 1000);
+  updateTimerUI();
+}
+
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  updateTimerUI();
+}
+
+function renderTrainingSelectors(kpi) {
+  const opts = state.bausteine.map(b => `<option value="${b.name}">${b.name} (${b.zweck})</option>`).join('');
+  const liveSel = document.getElementById('liveBaustein');
+  const qSel = document.getElementById('qBaustein');
+  const prevLive = liveSel.value || selectedDashBaustein;
+  liveSel.innerHTML = opts;
+  liveSel.value = prevLive;
+  qSel.innerHTML = opts;
+  qSel.value = selectedDashBaustein;
+
+  const today = toDateStr(new Date());
+  const nowHM = new Date().toTimeString().slice(0, 5);
+  if (!document.getElementById('liveDatum').value) document.getElementById('liveDatum').value = today;
+  if (!document.getElementById('liveUhrzeit').value) document.getElementById('liveUhrzeit').value = nowHM;
+  if (!document.getElementById('qDatum').value) document.getElementById('qDatum').value = today;
+  if (!document.getElementById('qUhrzeit').value) document.getElementById('qUhrzeit').value = nowHM;
+
+  updateLiveBausteinHint(kpi);
+  renderLiveChips();
+}
+
+function updateLiveBausteinHint(kpi) {
+  const name = document.getElementById('liveBaustein').value;
+  const b = getBausteinMap()[name];
+  document.getElementById('liveVorschlagBox').textContent = `Vorschlag: ${vorschlagText(name, kpi.aktMax, kpi.tageSeit)}  ·  Ziel-RIR: ${b?.zielRIR || '–'}`;
+  if (b) {
+    if (b.pauseBis) document.getElementById('livePause').value = b.pauseBis;
+    if (b.ersterAnteilVon) document.getElementById('liveRepInput').value = Math.round(kpi.aktMax * b.ersterAnteilVon);
+    else if (b.wdhAnteilVon) document.getElementById('liveRepInput').value = Math.round(kpi.aktMax * b.wdhAnteilVon);
+    else if (b.wdhFixVon) document.getElementById('liveRepInput').value = b.wdhFixVon;
+    if (name === 'EMOM' || name === 'E2MOM') setTimerMode('emom');
+    else if (name === 'Dichte-Block' || name === 'Stundentest') setTimerMode('density');
+    else setTimerMode('rest');
+renderGistUI();
+  }
+}
+
+function renderLiveChips() {
+  document.getElementById('liveRirChips').innerHTML = ['0', '1–2', '3–4', '5+'].map(r =>
+    `<button type="button" class="choice-chip ${liveRir === r ? 'active' : ''}" onclick="setLiveRir('${r}')">${r}</button>`
+  ).join('');
+  document.getElementById('liveEllbogenChips').innerHTML = [0,1,2,3,4,5,6,7,8,9,10].map(n =>
+    `<button type="button" class="choice-chip ${liveEllbogen === n ? (n >= state.einstellungen.ellbogenWarn ? 'warn-active' : 'active') : ''}" onclick="setLiveEllbogen(${n})">${n}</button>`
+  ).join('');
+}
+
+window.setLiveRir = r => { liveRir = (liveRir === r ? '' : r); renderLiveChips(); };
+window.setLiveEllbogen = n => { liveEllbogen = n; renderLiveChips(); };
+
+function renderLiveSets() {
+  document.getElementById('liveSetChips').innerHTML = liveSets.map((r, i) =>
+    `<span class="set-chip">S${i+1}: ${r} <button onclick="removeLiveSet(${i})" title="Entfernen">×</button></span>`
+  ).join('');
+  const total = liveSets.reduce((a, v) => a + v, 0);
+  document.getElementById('liveTotalReps').textContent = total;
+  document.getElementById('liveSetCount').textContent = liveSets.length;
+  document.getElementById('liveMaxSet').textContent = liveSets.length ? Math.max(...liveSets) : 0;
+  if (liveStartTime) {
+    const mins = Math.max(1, Math.round((Date.now() - liveStartTime) / 60000));
+    document.getElementById('liveElapsed').textContent = `${mins} Min`;
+  }
+}
+
+window.removeLiveSet = idx => { liveSets.splice(idx, 1); renderLiveSets(); };
+
+// ============================================================================
+// SETTINGS & IMPORT/EXPORT
+// ============================================================================
+function renderSettings() {
+  const c = state.einstellungen;
+  document.getElementById('setStart').value = c.start;
+  document.getElementById('setWunsch').value = c.wunschtermin;
+  document.getElementById('setZiel1').value = c.ziel1;
+  document.getElementById('setZiel2').value = c.ziel2;
+  document.getElementById('setBasisMax').value = c.basisMax;
+  document.getElementById('setBasisDatum').value = c.basisDatum;
+  document.getElementById('setGrenzFaktor').value = c.grenzFaktor;
+  document.getElementById('setReizFrist').value = c.reizFrist;
+  document.getElementById('setEllbogenWarn').value = c.ellbogenWarn;
+  document.getElementById('setTestAbstand').value = c.testAbstand;
+  document.getElementById('setStichtag').value = c.stichtag || '';
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabId}`));
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+// Theme
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem(THEME_KEY, t);
+}
+const savedTheme = localStorage.getItem(THEME_KEY) || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+applyTheme(savedTheme);
+document.getElementById('themeToggle').addEventListener('click', () => {
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+});
+
+// Dashboard interactions
+document.getElementById('dashBausteinSelect').addEventListener('change', e => {
+  selectedDashBaustein = e.target.value;
+  renderDashboard(computeKPIs());
+});
+document.getElementById('btnStartFromDash').addEventListener('click', () => {
+  document.getElementById('liveBaustein').value = selectedDashBaustein;
+  updateLiveBausteinHint(computeKPIs());
+  switchTab('training');
+});
+
+// Training mode tabs
+document.querySelectorAll('[data-tmode]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-tmode]').forEach(x => x.classList.toggle('active', x === b));
+  document.getElementById('training-live').style.display = b.dataset.tmode === 'live' ? 'block' : 'none';
+  document.getElementById('training-quick').style.display = b.dataset.tmode === 'quick' ? 'block' : 'none';
+}));
+
+document.getElementById('liveBaustein').addEventListener('change', () => updateLiveBausteinHint(computeKPIs()));
+document.querySelectorAll('[data-timermode]').forEach(b => b.addEventListener('click', () => setTimerMode(b.dataset.timermode)));
+
+document.getElementById('btnAddSet').addEventListener('click', () => {
+  const val = Number(document.getElementById('liveRepInput').value);
+  if (!val || val < 1) return;
+  if (!liveStartTime) liveStartTime = Date.now();
+  liveSets.push(val);
+  renderLiveSets();
+  if (timerMode === 'rest') {
+    stopTimer();
+    timerInitial = Number(document.getElementById('livePause').value) || 240;
+    timerSec = timerInitial;
+    startTimer();
+  }
+});
+
+document.getElementById('btnTimerStart').addEventListener('click', startTimer);
+document.getElementById('btnTimerPause').addEventListener('click', stopTimer);
+document.getElementById('btnTimerReset').addEventListener('click', () => { stopTimer(); timerSec = timerInitial; emomRound = 1; updateTimerUI(); });
+document.getElementById('btnTimerMinus').addEventListener('click', () => { timerSec = Math.max(0, timerSec - 30); updateTimerUI(); });
+document.getElementById('btnTimerPlus').addEventListener('click', () => { timerSec += 30; updateTimerUI(); });
+
+document.getElementById('btnSaveLive').addEventListener('click', () => {
+  if (!liveSets.length) { showToast('Bitte mindestens einen Satz abhaken.'); return; }
+  const allEqual = liveSets.every(v => v === liveSets[0]);
+  const nextId = Math.max(0, ...state.protokoll.map(s => s.id)) + 1;
+  const elapsedMin = liveStartTime ? Math.max(1, Math.round((Date.now() - liveStartTime) / 60000)) : null;
+  const dauer = Number(document.getElementById('liveDauer').value) || elapsedMin || 15;
+
+  state.protokoll.push({
+    id: nextId,
+    datum: document.getElementById('liveDatum').value || toDateStr(new Date()),
+    uhrzeit: document.getElementById('liveUhrzeit').value || '',
+    baustein: document.getElementById('liveBaustein').value,
+    saetze: allEqual ? liveSets.length : null,
+    wdh: allEqual ? liveSets[0] : null,
+    detail: allEqual ? '' : liveSets.join('-'),
+    pause: Number(document.getElementById('livePause').value) || null,
+    zusatzlast: Number(document.getElementById('liveLast').value) || null,
+    dauer,
+    rir: liveRir,
+    ellbogen: liveEllbogen,
+    klimmzuege: Number(document.getElementById('liveKlimm').value) || null,
+    notiz: document.getElementById('liveNotiz').value.trim()
+  });
+
+  saveState();
+  stopTimer();
+  liveSets = [];
+  liveStartTime = null;
+  liveRir = '';
+  document.getElementById('liveNotiz').value = '';
+  document.getElementById('liveDauer').value = '';
+  renderLiveSets();
+  renderAll();
+  showToast('✅ Einheit gespeichert!');
+  switchTab('heute');
+});
+
+document.getElementById('btnSaveQuick').addEventListener('click', () => {
+  const detail = document.getElementById('qDetail').value.trim();
+  const saetze = Number(document.getElementById('qSaetze').value) || null;
+  const wdh = Number(document.getElementById('qWdh').value) || null;
+  if (!detail && (!saetze || !wdh)) { showToast('Bitte Sätze × Wdh oder Detail angeben.'); return; }
+  const nextId = Math.max(0, ...state.protokoll.map(s => s.id)) + 1;
+  const ellRaw = document.getElementById('qEllbogen').value;
+
+  state.protokoll.push({
+    id: nextId,
+    datum: document.getElementById('qDatum').value || toDateStr(new Date()),
+    uhrzeit: document.getElementById('qUhrzeit').value || '',
+    baustein: document.getElementById('qBaustein').value,
+    saetze: detail ? null : saetze,
+    wdh: detail ? null : wdh,
+    detail,
+    pause: Number(document.getElementById('qPause').value) || null,
+    zusatzlast: Number(document.getElementById('qLast').value) || null,
+    dauer: Number(document.getElementById('qDauer').value) || null,
+    rir: document.getElementById('qRir').value,
+    ellbogen: ellRaw !== '' ? Number(ellRaw) : null,
+    klimmzuege: Number(document.getElementById('qKlimm').value) || null,
+    notiz: document.getElementById('qNotiz').value.trim()
+  });
+
+  saveState();
+  ['qSaetze','qWdh','qDetail','qPause','qDauer','qLast','qKlimm','qEllbogen','qNotiz'].forEach(id => document.getElementById(id).value = '');
+  renderAll();
+  showToast('💾 Einheit nachgetragen!');
+  switchTab('verlauf');
+});
+
+// Filters
+document.getElementById('filterBaustein').addEventListener('change', () => renderProtokollTable(computeKPIs().all));
+document.getElementById('filterSearch').addEventListener('input', () => renderProtokollTable(computeKPIs().all));
+
+// Checklist reset
+document.getElementById('btnResetChecklist').addEventListener('click', () => {
+  localStorage.removeItem(CHECKLIST_KEY);
+  renderPlan(computeKPIs());
+});
+
+// Save Settings
+document.getElementById('btnSaveSettings').addEventListener('click', () => {
+  const c = state.einstellungen;
+  c.start = document.getElementById('setStart').value;
+  c.wunschtermin = document.getElementById('setWunsch').value;
+  c.ziel1 = Number(document.getElementById('setZiel1').value) || 100;
+  c.ziel2 = Number(document.getElementById('setZiel2').value) || 1000;
+  c.basisMax = Number(document.getElementById('setBasisMax').value) || 30;
+  c.basisDatum = document.getElementById('setBasisDatum').value;
+  c.grenzFaktor = Number(document.getElementById('setGrenzFaktor').value) || 1.3;
+  c.reizFrist = Number(document.getElementById('setReizFrist').value) || 9;
+  c.ellbogenWarn = Number(document.getElementById('setEllbogenWarn').value) || 4;
+  c.testAbstand = Number(document.getElementById('setTestAbstand').value) || 28;
+  c.stichtag = document.getElementById('setStichtag').value || '';
+  saveState();
+  renderAll();
+  showToast('Einstellungen gespeichert.');
+});
+
+// Exports & Imports
+document.getElementById('btnExportJSON').addEventListener('click', () => {
+  downloadFile(JSON.stringify(state, null, 2), `liegestuetz_backup_${toDateStr(new Date())}.json`, 'application/json');
+  showToast('JSON-Backup heruntergeladen.');
+});
+
+document.getElementById('fileImportJSON').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const parsed = JSON.parse(ev.target.result);
+      if (!Array.isArray(parsed.protokoll)) throw new Error('Ungültiges Format');
+      state = parsed;
+      saveState();
+      renderAll();
+      showToast(`✅ ${state.protokoll.length} Einheiten importiert!`);
+    } catch (err) { showToast('Fehler beim Einlesen der JSON-Datei.'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('btnExportCSV').addEventListener('click', () => {
+  const rows = computeKPIs().all;
+  const hdr = ['Datum','Uhrzeit','Baustein','Saetze','Wdh','Detail','Pause','Zusatzlast','Dauer','RIR','Ellbogen','Klimmzuege','Volumen','LaengsterSatz','Notiz'];
+  const csv = [hdr.join(';')].concat(rows.map(s => [
+    s.datum, s.uhrzeit, s.baustein, s.saetze ?? '', s.wdh ?? '', s.detail, s.pause ?? '',
+    s.zusatzlast ?? '', s.dauer ?? '', s.rir, s.ellbogen ?? '', s.klimmzuege ?? '',
+    s.volumen, s.laengster, `"${(s.notiz||'').replace(/"/g,'""')}"`
+  ].join(';'))).join('\n');
+  downloadFile('\uFEFF' + csv, `liegestuetz_protokoll_${toDateStr(new Date())}.csv`, 'text/csv;charset=utf-8');
+  showToast('CSV für Excel exportiert.');
+});
+
+document.getElementById('fileImportXLSX').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { showToast('Excel-Import erfordert Internetverbindung (SheetJS).'); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      const ws = wb.Sheets['Protokoll'];
+      if (!ws) throw new Error('Blatt Protokoll nicht gefunden');
+      const raw = XLSX.utils.sheet_to_json(ws, { range: 3 });
+      const imported = [];
+      raw.forEach((r, idx) => {
+        if (!r['Datum'] || !r['Baustein']) return;
+        const d = r['Datum'] instanceof Date ? toDateStr(r['Datum']) : String(r['Datum']).slice(0, 10);
+        imported.push({
+          id: idx + 1,
+          datum: d,
+          uhrzeit: r['Uhrzeit'] instanceof Date ? r['Uhrzeit'].toTimeString().slice(0, 5) : (r['Uhrzeit'] || ''),
+          baustein: String(r['Baustein']),
+          saetze: r['Sätze'] ? Number(r['Sätze']) : null,
+          wdh: r['Wdh'] ? Number(r['Wdh']) : null,
+          detail: r['Detail'] ? String(r['Detail']) : '',
+          pause: r['Pause'] ? Number(r['Pause']) : null,
+          zusatzlast: r['Zusatzlast'] ? Number(r['Zusatzlast']) : null,
+          dauer: r['Dauer'] ? Number(r['Dauer']) : null,
+          rir: r['RIR'] ? String(r['RIR']) : '',
+          ellbogen: (r['Ellbogen'] !== undefined && r['Ellbogen'] !== '') ? Number(r['Ellbogen']) : null,
+          klimmzuege: r['Klimmzüge'] ? Number(r['Klimmzüge']) : null,
+          notiz: r['Notiz'] ? String(r['Notiz']) : ''
+        });
+      });
+      if (!imported.length) throw new Error('Keine Einheiten gefunden');
+      state.protokoll = imported;
+      saveState();
+      renderAll();
+      showToast(`✅ ${imported.length} Einheiten aus Excel importiert!`);
+    } catch (err) { showToast('Excel-Import fehlgeschlagen: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+document.getElementById('btnResetStarter').addEventListener('click', () => {
+  if (!confirm('Alle lokalen Änderungen verwerfen und auf die 50 Starter-Einheiten zurücksetzen?')) return;
+  state = JSON.parse(JSON.stringify(STARTER_DATA));
+  saveState();
+  renderAll();
+  showToast('Auf Starterdaten zurückgesetzt.');
+});
+
+
+// ============================================================================
+// GITHUB GIST SYNC (OPTION B)
+// ============================================================================
+const GIST_CFG_KEY = 'pushup_planer_gist_cfg';
+const GIST_FILENAME = 'liegestuetz_planer_data.json';
+
+function loadGistCfg() {
+  try {
+    return JSON.parse(localStorage.getItem(GIST_CFG_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function saveGistCfgObj(cfg) {
+  localStorage.setItem(GIST_CFG_KEY, JSON.stringify(cfg));
+  renderGistUI();
+}
+
+function readGistInputs() {
+  const cur = loadGistCfg();
+  return {
+    token: document.getElementById('gistToken').value.trim(),
+    gistId: document.getElementById('gistId').value.trim(),
+    autoSync: document.getElementById('gistAutoSync').checked,
+    lastSync: cur.lastSync || null,
+    lastAction: cur.lastAction || ''
+  };
+}
+
+function setSyncTopState(mode, text) {
+  const btn = document.getElementById('topSyncBtn');
+  const icon = document.getElementById('topSyncIcon');
+  const lbl = document.getElementById('topSyncLabel');
+  btn.classList.remove('synced', 'error');
+  icon.classList.remove('spinning');
+  if (mode === 'loading') {
+    icon.textContent = '🔄';
+    icon.classList.add('spinning');
+    lbl.textContent = text || 'Sync…';
+  } else if (mode === 'synced') {
+    btn.classList.add('synced');
+    icon.textContent = '☁️';
+    lbl.textContent = text || 'Sync';
+  } else if (mode === 'error') {
+    btn.classList.add('error');
+    icon.textContent = '⚠️';
+    lbl.textContent = text || 'Fehler';
+  } else {
+    icon.textContent = '☁️';
+    lbl.textContent = text || 'Sync';
+  }
+}
+
+function renderGistUI() {
+  const cfg = loadGistCfg();
+  document.getElementById('gistToken').value = cfg.token || '';
+  document.getElementById('gistId').value = cfg.gistId || '';
+  document.getElementById('gistAutoSync').checked = cfg.autoSync !== false;
+
+  const badge = document.getElementById('gistBadge');
+  const box = document.getElementById('gistStatusBox');
+  if (cfg.token && cfg.gistId) {
+    badge.className = 'badge badge-green';
+    badge.textContent = 'Verbunden';
+    const lastStr = cfg.lastSync ? new Date(cfg.lastSync).toLocaleString('de-DE') : 'noch nie';
+    box.innerHTML = `<strong>Verbunden</strong> · Gist-ID: <code>${cfg.gistId}</code> · Letzter Sync: <strong>${lastStr}</strong>${cfg.lastAction ? ` (${cfg.lastAction})` : ''}`;
+    setSyncTopState('synced', 'Sync');
+  } else if (cfg.token) {
+    badge.className = 'badge badge-amber';
+    badge.textContent = 'Token bereit (ohne Gist-ID)';
+    box.innerHTML = 'Token gespeichert. Klicke auf <strong>„Hochladen“</strong> (erstellt ein neues privates Gist) oder auf <strong>„Gist automatisch suchen“</strong> (auf dem 2. Gerät).';
+    setSyncTopState('idle', 'Sync');
+  } else {
+    badge.className = 'badge badge-gray';
+    badge.textContent = 'Nicht eingerichtet';
+    box.innerHTML = 'Noch nicht eingerichtet. Trage deinen GitHub-Token (mit Berechtigung <code>gist</code>) ein.';
+    setSyncTopState('idle', 'Sync');
+  }
+}
+
+async function gistFetch(url, token, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = j.message || ''; } catch {}
+    throw new Error(`GitHub API ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  return res.json();
+}
+
+async function findExistingGist(token) {
+  const list = await gistFetch('https://api.github.com/gists?per_page=100', token);
+  const found = list.find(g => g.files && g.files[GIST_FILENAME]);
+  return found ? found.id : null;
+}
+
+async function pushToGist(silent = false) {
+  const cfg = readGistInputs();
+  if (!cfg.token) {
+    if (!silent) showToast('Bitte zuerst GitHub-Token eintragen.');
+    return false;
+  }
+  setSyncTopState('loading', 'Upload…');
+  try {
+    if (!state.updatedAt) state.updatedAt = new Date().toISOString();
+    const payload = {
+      description: 'Liegestütz-Planer Sync-Backup (privat)',
+      public: false,
+      files: {
+        [GIST_FILENAME]: { content: JSON.stringify(state, null, 2) }
+      }
+    };
+    let result;
+    if (cfg.gistId) {
+      result = await gistFetch(`https://api.github.com/gists/${cfg.gistId}`, cfg.token, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+    } else {
+      result = await gistFetch('https://api.github.com/gists', cfg.token, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      cfg.gistId = result.id;
+    }
+    cfg.lastSync = new Date().toISOString();
+    cfg.lastAction = `Upload (${state.protokoll.length} Einheiten)`;
+    saveGistCfgObj(cfg);
+    if (!silent) showToast(`☁️ Hochgeladen (${state.protokoll.length} Einheiten)`);
+    return true;
+  } catch (err) {
+    setSyncTopState('error', 'Fehler');
+    if (!silent) showToast('Upload-Fehler: ' + err.message);
+    return false;
+  }
+}
+
+async function pullFromGist(forceConfirm = true) {
+  const cfg = readGistInputs();
+  if (!cfg.token) { showToast('Bitte zuerst GitHub-Token eintragen.'); return false; }
+  setSyncTopState('loading', 'Laden…');
+  try {
+    if (!cfg.gistId) {
+      const foundId = await findExistingGist(cfg.token);
+      if (!foundId) throw new Error('Kein Planer-Gist gefunden. Zuerst einmal hochladen.');
+      cfg.gistId = foundId;
+    }
+    const gist = await gistFetch(`https://api.github.com/gists/${cfg.gistId}`, cfg.token);
+    const fileObj = gist.files && gist.files[GIST_FILENAME];
+    if (!fileObj || !fileObj.content) throw new Error(`Datei ${GIST_FILENAME} nicht im Gist gefunden.`);
+    const remote = JSON.parse(fileObj.content);
+    if (!Array.isArray(remote.protokoll)) throw new Error('Ungültiges Datenformat im Gist.');
+
+    if (forceConfirm && state.updatedAt && remote.updatedAt && state.updatedAt > remote.updatedAt) {
+      if (!confirm('Deine lokalen Daten sind neuer als die im Gist. Trotzdem mit dem Gist überschreiben?')) {
+        renderGistUI();
+        return false;
+      }
+    }
+    state = remote;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    cfg.lastSync = new Date().toISOString();
+    cfg.lastAction = `Download (${state.protokoll.length} Einheiten)`;
+    saveGistCfgObj(cfg);
+    renderAll();
+    showToast(`⬇️ Geladen (${state.protokoll.length} Einheiten)`);
+    return true;
+  } catch (err) {
+    setSyncTopState('error', 'Fehler');
+    showToast('Download-Fehler: ' + err.message);
+    return false;
+  }
+}
+
+async function smartSyncGist() {
+  const cfg = readGistInputs();
+  if (!cfg.token) {
+    switchTab('daten');
+    showToast('Bitte GitHub-Token für Sync eintragen.');
+    return;
+  }
+  setSyncTopState('loading', 'Sync…');
+  try {
+    if (!cfg.gistId) {
+      const foundId = await findExistingGist(cfg.token);
+      if (foundId) {
+        cfg.gistId = foundId;
+        saveGistCfgObj(cfg);
+      } else {
+        // No gist exists yet -> create via push
+        await pushToGist(false);
+        return;
+      }
+    }
+    const gist = await gistFetch(`https://api.github.com/gists/${cfg.gistId}`, cfg.token);
+    const fileObj = gist.files && gist.files[GIST_FILENAME];
+    if (!fileObj || !fileObj.content) {
+      await pushToGist(false);
+      return;
+    }
+    const remote = JSON.parse(fileObj.content);
+    const rTime = remote.updatedAt ? Date.parse(remote.updatedAt) : 0;
+    const lTime = state.updatedAt ? Date.parse(state.updatedAt) : 0;
+
+    if (rTime > lTime) {
+      state = remote;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      cfg.lastSync = new Date().toISOString();
+      cfg.lastAction = `Smart-Sync ↓ (${state.protokoll.length} Einh.)`;
+      saveGistCfgObj(cfg);
+      renderAll();
+      showToast(`⬇️ Neuere Gist-Daten übernommen (${state.protokoll.length} Einh.)`);
+    } else if (lTime > rTime || state.protokoll.length !== (remote.protokoll || []).length) {
+      await pushToGist(false);
+    } else {
+      cfg.lastSync = new Date().toISOString();
+      cfg.lastAction = 'Bereits aktuell';
+      saveGistCfgObj(cfg);
+      showToast('✅ Bereits auf dem neuesten Stand.');
+    }
+  } catch (err) {
+    setSyncTopState('error', 'Fehler');
+    showToast('Sync-Fehler: ' + err.message);
+  }
+}
+
+let autoPushTimer = null;
+function maybeAutoPushGist() {
+  const cfg = loadGistCfg();
+  if (cfg.token && cfg.gistId && cfg.autoSync !== false) {
+    clearTimeout(autoPushTimer);
+    autoPushTimer = setTimeout(() => pushToGist(true), 600);
+  }
+}
+
+document.getElementById('topSyncBtn').addEventListener('click', () => {
+  const cfg = loadGistCfg();
+  if (!cfg.token) {
+    switchTab('daten');
+    showToast('Richte hier deinen GitHub-Gist-Sync ein.');
+  } else {
+    smartSyncGist();
+  }
+});
+
+document.getElementById('btnSaveGistCfg').addEventListener('click', () => {
+  const cfg = readGistInputs();
+  saveGistCfgObj(cfg);
+  showToast('Sync-Einstellungen lokal gespeichert.');
+});
+
+document.getElementById('btnClearGistCfg').addEventListener('click', () => {
+  if (!confirm('GitHub-Token und Gist-Verknüpfung aus diesem Browser entfernen? (Deine lokalen Trainingsdaten bleiben erhalten.)')) return;
+  localStorage.removeItem(GIST_CFG_KEY);
+  renderGistUI();
+  showToast('Gist-Sync getrennt.');
+});
+
+document.getElementById('btnCopyGistId').addEventListener('click', () => {
+  const id = document.getElementById('gistId').value.trim();
+  if (!id) { showToast('Noch keine Gist-ID vorhanden.'); return; }
+  navigator.clipboard?.writeText(id);
+  showToast('Gist-ID kopiert!');
+});
+
+document.getElementById('btnGistFind').addEventListener('click', async () => {
+  const cfg = readGistInputs();
+  if (!cfg.token) { showToast('Bitte zuerst Token eintragen.'); return; }
+  setSyncTopState('loading', 'Suche…');
+  try {
+    const id = await findExistingGist(cfg.token);
+    if (id) {
+      cfg.gistId = id;
+      saveGistCfgObj(cfg);
+      showToast('✅ Privates Planer-Gist gefunden!');
+    } else {
+      renderGistUI();
+      showToast('Kein bestehendes Planer-Gist gefunden – klicke auf „Hochladen“ zum Erstellen.');
+    }
+  } catch (err) {
+    setSyncTopState('error', 'Fehler');
+    showToast('Suche fehlgeschlagen: ' + err.message);
+  }
+});
+
+document.getElementById('btnGistSync').addEventListener('click', smartSyncGist);
+document.getElementById('btnGistPush').addEventListener('click', () => pushToGist(false));
+document.getElementById('btnGistPull').addEventListener('click', () => pullFromGist(true));
+
+// Initial render
+renderAll();
+setTimerMode('rest');
+</script>
+</body>
+</html>
