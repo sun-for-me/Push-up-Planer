@@ -311,6 +311,27 @@
   }
   .gist-status-box strong { color: var(--text); }
   .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Edit Session Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(2px);
+    display: none; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-card {
+    width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    animation: fadeIn .16s ease;
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .act-cell { white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -798,6 +819,47 @@
   <button class="mnav-btn" data-tab="plan"><span class="ic">🗺️</span>Plan</button>
   <button class="mnav-btn" data-tab="daten"><span class="ic">⚙️</span>Daten</button>
 </nav>
+
+<!-- Edit Session Modal -->
+<div class="modal-backdrop" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="editModalTitle" style="font-size:1.1rem;">✏️ Einheit bearbeiten</h2>
+      <button type="button" class="btn btn-sm" id="btnCloseEditModal" title="Schließen">✕</button>
+    </div>
+    <form id="editSessionForm">
+      <input type="hidden" id="editId">
+      <div class="form-grid cols-4" style="margin-bottom:12px;">
+        <div><label class="fld-lbl" for="editDatum">Datum</label><input type="date" id="editDatum" required></div>
+        <div><label class="fld-lbl" for="editUhrzeit">Uhrzeit</label><input type="time" id="editUhrzeit"></div>
+        <div style="grid-column:span 2;"><label class="fld-lbl" for="editBaustein">Baustein</label><select id="editBaustein" required></select></div>
+      </div>
+      <div class="form-grid cols-4" style="margin-bottom:12px;">
+        <div><label class="fld-lbl" for="editSaetze">Sätze</label><input type="number" id="editSaetze" min="1"></div>
+        <div><label class="fld-lbl" for="editWdh">Wdh pro Satz</label><input type="number" id="editWdh" min="1"></div>
+        <div style="grid-column:span 2;"><label class="fld-lbl" for="editDetail">ODER Detail (z. B. 51-43-36)</label><input type="text" id="editDetail" placeholder="hat Vorrang vor Sätze × Wdh"></div>
+      </div>
+      <div class="form-grid cols-4" style="margin-bottom:12px;">
+        <div><label class="fld-lbl" for="editPause">Pause (s)</label><input type="number" id="editPause" min="0" step="10"></div>
+        <div><label class="fld-lbl" for="editDauer">Dauer (Min)</label><input type="number" id="editDauer" min="1"></div>
+        <div><label class="fld-lbl" for="editLast">Zusatzlast (kg)</label><input type="number" id="editLast" min="0" step="0.5"></div>
+        <div><label class="fld-lbl" for="editKlimm">Klimmzüge</label><input type="number" id="editKlimm" min="0"></div>
+      </div>
+      <div class="form-grid cols-3" style="margin-bottom:14px;">
+        <div>
+          <label class="fld-lbl" for="editRir">RIR</label>
+          <select id="editRir"><option value="">–</option><option>0</option><option>1–2</option><option>3–4</option><option>5+</option></select>
+        </div>
+        <div><label class="fld-lbl" for="editEllbogen">Ellbogen (0–10)</label><input type="number" id="editEllbogen" min="0" max="10"></div>
+        <div><label class="fld-lbl" for="editNotiz">Notiz</label><input type="text" id="editNotiz"></div>
+      </div>
+      <div class="btn-row" style="justify-content:flex-end;">
+        <button type="button" class="btn" id="btnCancelEditModal">Abbrechen</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveEdit">💾 Änderungen speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1453,7 +1515,7 @@ function renderProtokollTable(allEnriched) {
         <td>${s.rir ? `<span class="badge ${rirBadge}">${s.rir}</span>` : '–'}</td>
         <td class="num">${s.ellbogen !== null && s.ellbogen !== '' ? (ellWarn ? `<span class="badge badge-red">${s.ellbogen}</span>` : s.ellbogen) : '–'}</td>
         <td style="max-width:200px;color:var(--text-muted);font-size:0.82rem;">${s.notiz || ''}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})" title="Löschen">✕</button></td>
+        <td><div class="act-cell"><button class="btn btn-sm" onclick="openEditSession(${s.id})" title="Bearbeiten">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteSession(${s.id})" title="Löschen">✕</button></div></td>
       </tr>`;
   }).join('');
 }
@@ -1644,12 +1706,7 @@ function renderTrainingSelectors(kpi) {
   qSel.innerHTML = opts;
   qSel.value = selectedDashBaustein;
 
-  const today = toDateStr(new Date());
-  const nowHM = new Date().toTimeString().slice(0, 5);
-  if (!document.getElementById('liveDatum').value) document.getElementById('liveDatum').value = today;
-  if (!document.getElementById('liveUhrzeit').value) document.getElementById('liveUhrzeit').value = nowHM;
-  if (!document.getElementById('qDatum').value) document.getElementById('qDatum').value = today;
-  if (!document.getElementById('qUhrzeit').value) document.getElementById('qUhrzeit').value = nowHM;
+  refreshDefaultDates(false);
 
   updateLiveBausteinHint(kpi);
   renderLiveChips();
@@ -1667,7 +1724,6 @@ function updateLiveBausteinHint(kpi) {
     if (name === 'EMOM' || name === 'E2MOM') setTimerMode('emom');
     else if (name === 'Dichte-Block' || name === 'Stundentest') setTimerMode('density');
     else setTimerMode('rest');
-renderGistUI();
   }
 }
 
@@ -1732,6 +1788,7 @@ function downloadFile(content, filename, mime) {
 function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tabId}`));
   document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+  if (tabId === 'training') refreshDefaultDates(false);
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
@@ -1821,6 +1878,7 @@ document.getElementById('btnSaveLive').addEventListener('click', () => {
   document.getElementById('liveNotiz').value = '';
   document.getElementById('liveDauer').value = '';
   renderLiveSets();
+  refreshDefaultDates(true);
   renderAll();
   showToast('✅ Einheit gespeichert!');
   switchTab('heute');
@@ -1853,6 +1911,7 @@ document.getElementById('btnSaveQuick').addEventListener('click', () => {
 
   saveState();
   ['qSaetze','qWdh','qDetail','qPause','qDauer','qLast','qKlimm','qEllbogen','qNotiz'].forEach(id => document.getElementById(id).value = '');
+  refreshDefaultDates(true);
   renderAll();
   showToast('💾 Einheit nachgetragen!');
   switchTab('verlauf');
@@ -2271,9 +2330,129 @@ document.getElementById('btnGistSync').addEventListener('click', smartSyncGist);
 document.getElementById('btnGistPush').addEventListener('click', () => pushToGist(false));
 document.getElementById('btnGistPull').addEventListener('click', () => pullFromGist(true));
 
+
+// ============================================================================
+// AUTO-DATE REFRESH (verhindert altes Datum nach mehrtägig offenem Tab)
+// ============================================================================
+let lastAutoDate = toDateStr(new Date());
+
+function refreshDefaultDates(force = false) {
+  const today = toDateStr(new Date());
+  const nowHM = new Date().toTimeString().slice(0, 5);
+  const dayChanged = today !== lastAutoDate;
+
+  const liveD = document.getElementById('liveDatum');
+  const liveT = document.getElementById('liveUhrzeit');
+  if (liveD && (force || !liveD.value || (liveSets.length === 0 && !liveStartTime && (dayChanged || liveD.value === lastAutoDate)))) {
+    liveD.value = today;
+    if (liveT) liveT.value = nowHM;
+  }
+
+  const qD = document.getElementById('qDatum');
+  const qT = document.getElementById('qUhrzeit');
+  const qDirty = (document.getElementById('qSaetze')?.value || document.getElementById('qWdh')?.value || document.getElementById('qDetail')?.value);
+  if (qD && (force || !qD.value || (!qDirty && (dayChanged || qD.value === lastAutoDate)))) {
+    qD.value = today;
+    if (qT) qT.value = nowHM;
+  }
+
+  if (dayChanged) {
+    lastAutoDate = today;
+    if (!state.einstellungen.stichtag && (typeof currentUser === 'undefined' || currentUser)) {
+      renderAll();
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshDefaultDates(false);
+});
+window.addEventListener('focus', () => refreshDefaultDates(false));
+
+// ============================================================================
+// EINHEIT BEARBEITEN (MODAL)
+// ============================================================================
+window.openEditSession = function(id) {
+  const s = state.protokoll.find(x => x.id === id);
+  if (!s) return;
+  const sel = document.getElementById('editBaustein');
+  sel.innerHTML = state.bausteine.map(b => `<option value="${b.name}">${b.name} (${b.zweck})</option>`).join('');
+  if (!state.bausteine.some(b => b.name === s.baustein) && s.baustein) {
+    sel.innerHTML += `<option value="${s.baustein}">${s.baustein}</option>`;
+  }
+
+  document.getElementById('editId').value = s.id;
+  document.getElementById('editDatum').value = s.datum || '';
+  document.getElementById('editUhrzeit').value = s.uhrzeit || '';
+  sel.value = s.baustein || '';
+  document.getElementById('editSaetze').value = s.saetze ?? '';
+  document.getElementById('editWdh').value = s.wdh ?? '';
+  document.getElementById('editDetail').value = s.detail || '';
+  document.getElementById('editPause').value = s.pause ?? '';
+  document.getElementById('editDauer').value = s.dauer ?? '';
+  document.getElementById('editLast').value = s.zusatzlast ?? '';
+  document.getElementById('editKlimm').value = s.klimmzuege ?? '';
+  document.getElementById('editRir').value = s.rir || '';
+  document.getElementById('editEllbogen').value = (s.ellbogen !== null && s.ellbogen !== undefined) ? s.ellbogen : '';
+  document.getElementById('editNotiz').value = s.notiz || '';
+
+  document.getElementById('editModal').classList.add('open');
+};
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+document.getElementById('btnCloseEditModal').addEventListener('click', closeEditModal);
+document.getElementById('btnCancelEditModal').addEventListener('click', closeEditModal);
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target.id === 'editModal') closeEditModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('editModal').classList.contains('open')) closeEditModal();
+});
+
+document.getElementById('editSessionForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = Number(document.getElementById('editId').value);
+  const idx = state.protokoll.findIndex(x => x.id === id);
+  if (idx === -1) return;
+
+  const detail = document.getElementById('editDetail').value.trim();
+  const saetze = Number(document.getElementById('editSaetze').value) || null;
+  const wdh = Number(document.getElementById('editWdh').value) || null;
+  if (!detail && (!saetze || !wdh)) {
+    showToast('Bitte Sätze × Wdh oder Detail angeben.');
+    return;
+  }
+  const ellRaw = document.getElementById('editEllbogen').value;
+  state.protokoll[idx] = {
+    ...state.protokoll[idx],
+    datum: document.getElementById('editDatum').value || state.protokoll[idx].datum,
+    uhrzeit: document.getElementById('editUhrzeit').value || '',
+    baustein: document.getElementById('editBaustein').value,
+    saetze: detail ? null : saetze,
+    wdh: detail ? null : wdh,
+    detail,
+    pause: Number(document.getElementById('editPause').value) || null,
+    zusatzlast: Number(document.getElementById('editLast').value) || null,
+    dauer: Number(document.getElementById('editDauer').value) || null,
+    rir: document.getElementById('editRir').value,
+    ellbogen: ellRaw !== '' ? Number(ellRaw) : null,
+    klimmzuege: Number(document.getElementById('editKlimm').value) || null,
+    notiz: document.getElementById('editNotiz').value.trim()
+  };
+
+  saveState();
+  closeEditModal();
+  renderAll();
+  showToast('✏️ Einheit aktualisiert!');
+});
+
 // Initial render
 renderAll();
 setTimerMode('rest');
+renderGistUI();
 </script>
 </body>
 </html>
