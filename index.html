@@ -332,6 +332,53 @@
     margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
   }
   .act-cell { white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
+
+  /* Clickable KPI Cards & Floating Tooltip */
+  .kpi-card.kpi-clickable {
+    cursor: pointer;
+    transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+  }
+  .kpi-card.kpi-clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(15,23,42,0.12);
+    border-color: var(--accent);
+  }
+  [data-theme="dark"] .kpi-card.kpi-clickable:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+  }
+  .kpi-label-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .kpi-open-hint {
+    font-size: 0.72rem; font-weight: 700; color: var(--accent);
+    opacity: 0.85; white-space: nowrap;
+  }
+  .app-tooltip {
+    position: fixed; z-index: 130; pointer-events: none;
+    background: #0f172a; color: #f8fafc;
+    border: 1px solid rgba(148,163,184,0.28);
+    border-radius: 10px; padding: 10px 12px;
+    font-size: 0.82rem; line-height: 1.45;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.32);
+    max-width: 290px; opacity: 0;
+    transform: translateY(4px);
+    transition: opacity .12s ease, transform .12s ease;
+  }
+  .app-tooltip.visible { opacity: 1; transform: translateY(0); }
+  .app-tooltip .tt-title { font-weight: 800; font-size: 0.86rem; margin-bottom: 4px; color: #fff; }
+  .app-tooltip .tt-sub { color: #94a3b8; font-size: 0.76rem; margin-bottom: 6px; }
+  .app-tooltip .tt-row { display: flex; justify-content: space-between; gap: 14px; }
+  .app-tooltip .tt-row strong { color: #fff; font-variant-numeric: tabular-nums; }
+  .app-tooltip .tt-sep { border: none; border-top: 1px solid rgba(148,163,184,0.2); margin: 6px 0; }
+  .app-tooltip .tt-list { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: #cbd5e1; }
+  .app-tooltip .tt-hint { margin-top: 6px; font-size: 0.74rem; color: #60a5fa; font-weight: 600; }
+
+  .chart-hover-col { cursor: pointer; }
+  .chart-hover-col .hover-band { fill: var(--accent); opacity: 0; transition: opacity .12s; }
+  .chart-hover-col:hover .hover-band { opacity: 0.1; }
+  .chart-hover-col:hover .vol-bar { opacity: 1; }
+  .chart-hover-col .grenze-dot { opacity: 0; transition: opacity .12s; }
+  .chart-hover-col:hover .grenze-dot { opacity: 1; }
 </style>
 </head>
 <body>
@@ -861,6 +908,19 @@
   </div>
 </div>
 
+<!-- 7-Tage Volumen Detail Modal -->
+<div class="modal-backdrop" id="vol7Modal" role="dialog" aria-modal="true" aria-labelledby="vol7ModalTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="vol7ModalTitle" style="font-size:1.1rem;">📊 Volumen der letzten 7 Tage</h2>
+      <button type="button" class="btn btn-sm" id="btnCloseVol7Modal" title="Schließen">✕</button>
+    </div>
+    <div id="vol7ModalBody"></div>
+  </div>
+</div>
+
+<div class="app-tooltip" id="appTooltip" role="tooltip"></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1160,7 +1220,7 @@ function computeKPIs() {
   let aktPhase = state.phasen.find(p => aktMax >= p.maxVon && aktMax < p.maxBis) || state.phasen[state.phasen.length - 1];
 
   return {
-    heute, valid, all, letzteEinheit, tageSeit, tageZ1, tageZ2,
+    heute, valid, all, lastSession, last7, letzteEinheit, tageSeit, tageZ1, tageZ2,
     volumen7, schnitt4W, verh, grenze7, einh7, d28,
     aktMax, bestMax, testDatum, tempo, prognose, naechsterTest,
     letzterEllbogen, bestDichte, aktWoche, empfehlung, ampel, maxTests, aktPhase
@@ -1203,6 +1263,7 @@ function renderDashboard(kpi) {
   const reizWarn = (kpi.tageZ1 > cfg.reizFrist || kpi.tageZ2 > cfg.reizFrist) ? 'warn' : '';
   const tageLabel = kpi.tageSeit === null ? '–' : (kpi.tageSeit === 0 ? 'heute' : (kpi.tageSeit === 1 ? 'gestern' : `vor ${kpi.tageSeit} T`));
 
+  _lastKPI = kpi;
   document.getElementById('kpiGrid').innerHTML = `
     <div class="card kpi-card">
       <div class="kpi-label">Aktuelles Max</div>
@@ -1215,18 +1276,29 @@ function renderDashboard(kpi) {
       <div class="kpi-val-row"><span class="kpi-val" style="font-size:1.45rem;">${progLabel}</span></div>
       <div class="kpi-sub" style="margin-top:auto;">${kpi.tempo ? `Tempo +${kpi.tempo.toFixed(1)} Wdh./Woche` : 'Noch zu wenige Tests'}</div>
     </div>
-    <div class="card kpi-card ${loadClass}">
-      <div class="kpi-label">Volumen (7 Tage)</div>
+    <div class="card kpi-card kpi-clickable ${loadClass}" id="kpiVol7Card" role="button" tabindex="0" onclick="openVol7Modal()">
+      <div class="kpi-label-row">
+        <span class="kpi-label">Volumen (7 Tage)</span>
+        <span class="kpi-open-hint">Details ↗</span>
+      </div>
       <div class="kpi-val-row"><span class="kpi-val">${kpi.volumen7}</span><span class="badge ${loadClass==='danger'?'badge-red':(loadClass==='warn'?'badge-amber':'badge-gray')}">${loadPct} % Limit</span></div>
       <div class="pbar"><div class="pbar-fill ${loadClass}" style="width:${Math.min(100, loadPct)}%"></div></div>
       <div class="kpi-sub">${kpi.verh ? Math.round(kpi.verh*100) : 0} % vom 4W-Schnitt · Grenze ${Math.round(kpi.grenze7)}</div>
     </div>
-    <div class="card kpi-card ${reizWarn}">
-      <div class="kpi-label">Letzte Einheit</div>
+    <div class="card kpi-card ${kpi.lastSession ? 'kpi-clickable' : ''} ${reizWarn}" id="kpiLastSessionCard" ${kpi.lastSession ? 'role="button" tabindex="0" onclick="openLastSessionFromDash()"' : ''}>
+      <div class="kpi-label-row">
+        <span class="kpi-label">Letzte Einheit</span>
+        ${kpi.lastSession ? '<span class="kpi-open-hint">Öffnen ↗</span>' : ''}
+      </div>
       <div class="kpi-val-row"><span class="kpi-val" style="font-size:1.55rem;">${tageLabel}</span></div>
-      <div class="kpi-sub" style="margin-top:auto;">Ziel 1 vor ${kpi.tageZ1} T · Ziel 2 vor ${kpi.tageZ2} T</div>
+      <div class="kpi-sub" style="margin-top:auto;">${kpi.lastSession ? `${escapeHtml(kpi.lastSession.baustein)} (${kpi.lastSession.volumen} Wdh.) · ` : ''}Z1 vor ${kpi.tageZ1} T · Z2 vor ${kpi.tageZ2} T</div>
     </div>
   `;
+
+  bindTooltipHandlers(document.getElementById('kpiVol7Card'), () => buildVol7TooltipHtml(kpi));
+  if (kpi.lastSession) {
+    bindTooltipHandlers(document.getElementById('kpiLastSessionCard'), () => buildLastSessionTooltipHtml(kpi));
+  }
 
   const banner = document.getElementById('empfehlungBanner');
   banner.className = `banner ${kpi.ampel}`;
@@ -1328,27 +1400,41 @@ function drawBausteinChart(items) {
 
   let pausePts = [];
   items.forEach((it, idx) => {
-    const cx = padL + step * idx + step / 2;
+    const xCol = padL + step * idx;
+    const cx = xCol + step / 2;
     const bh = (it.laengster / maxL) * (H - padT - padB);
     const y = H - padB - bh;
-    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="4" fill="var(--accent)" opacity="0.88"/>`;
+    html += `<g class="chart-hover-col" data-bst-idx="${idx}">`;
+    html += `<rect class="hover-band" x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" rx="4"/>`;
+    html += `<rect class="vol-bar" x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="4" fill="var(--accent)" opacity="0.88"/>`;
     html += `<text x="${cx}" y="${y-5}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">${it.laengster}</text>`;
     html += `<text x="${cx}" y="${H-14}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${fmtShortDE(it.datum)}</text>`;
+    html += `<rect x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" fill="transparent"/>`;
+    html += `</g>`;
     if (Number(it.pause) > 0) {
       const py = H - padB - (Number(it.pause) / maxP) * (H - padT - padB);
       pausePts.push(`${cx},${py}`);
     }
   });
-  if (pausePts.length > 1) {
-    html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.5" points="${pausePts.join(' ')}"/>`;
-  }
-  pausePts.forEach(pt => {
-    const [x, y] = pt.split(',');
-    html += `<circle cx="${x}" cy="${y}" r="3.5" fill="#f59e0b"/>`;
-  });
+  if (pausePts.length > 1) html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.5" style="pointer-events:none;" points="${pausePts.join(' ')}"/>`;
+  pausePts.forEach(pt => { const [x, y] = pt.split(','); html += `<circle cx="${x}" cy="${y}" r="3.5" fill="#f59e0b" style="pointer-events:none;"/>`; });
   html += `<text x="${W-padR}" y="12" text-anchor="end" fill="#f59e0b" font-size="10" font-weight="700">● Pause (s)</text>`;
   html += `<text x="${padL}" y="12" text-anchor="start" fill="var(--accent)" font-size="10" font-weight="700">■ Längster Satz</text>`;
   svg.innerHTML = html;
+
+  svg.querySelectorAll('.chart-hover-col').forEach(el => {
+    const it = items[Number(el.dataset.bstIdx)];
+    const ausf = it.detail ? it.detail : `${it.saetze || ''} × ${it.wdh || ''}`;
+    const ttHtml = `
+      <div class="tt-title">${escapeHtml(it.baustein)} · ${fmtDE(it.datum)}</div>
+      <div class="tt-row"><span>Ausführung</span><strong>${escapeHtml(ausf)}</strong></div>
+      <div class="tt-row"><span>Längster / Volumen</span><strong>${it.laengster} / ${it.volumen}</strong></div>
+      ${it.pause ? `<div class="tt-row"><span>Pause</span><strong>${it.pause} s</strong></div>` : ''}
+      ${it.rir ? `<div class="tt-row"><span>RIR</span><strong>${escapeHtml(it.rir)}</strong></div>` : ''}
+    `;
+    bindTooltipHandlers(el, ttHtml);
+    el.addEventListener('click', ev => { ev.stopPropagation(); showAppTooltip(ev, ttHtml); });
+  });
 }
 
 function drawMaxChart(kpi) {
@@ -1402,13 +1488,16 @@ function drawVolChart(kpi) {
   const W = 480, H = 220, padL = 40, padR = 14, padT = 18, padB = 30;
   const weeks = [];
   for (let w = Math.max(1, kpi.aktWoche - 15); w <= kpi.aktWoche; w++) {
-    const vol = kpi.valid.filter(s => s.woche === w).reduce((a, s) => a + s.volumen, 0);
+    const wkSessions = kpi.valid.filter(s => s.woche === w);
+    const vol = wkSessions.reduce((a, s) => a + s.volumen, 0);
     let grenze = null;
     if (w >= 5) {
       const prev4 = kpi.valid.filter(s => s.woche >= w - 4 && s.woche < w).reduce((a, s) => a + s.volumen, 0);
       grenze = (prev4 / 4) * cfg.grenzFaktor;
     }
-    weeks.push({ w, vol, grenze });
+    const wStart = addDaysStr(cfg.start, (w - 1) * 7);
+    const wEnd = addDaysStr(cfg.start, w * 7 - 1);
+    weeks.push({ w, vol, grenze, sessions: wkSessions, wStart, wEnd });
   }
   const maxY = Math.max(200, ...weeks.map(x => Math.max(x.vol, x.grenze || 0))) * 1.12;
   const step = (W - padL - padR) / weeks.length;
@@ -1425,22 +1514,57 @@ function drawVolChart(kpi) {
   let gPts = [];
   weeks.forEach((wk, idx) => {
     const cx = padL + step * idx + step / 2;
-    const bh = (wk.vol / maxY) * (H - padT - padB);
-    const y = H - padB - bh;
-    const over = wk.grenze && wk.vol > wk.grenze;
-    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${over ? '#ef4444' : 'var(--accent)'}" opacity="0.85"/>`;
-    if (idx % 2 === 0 || idx === weeks.length - 1) {
-      html += `<text x="${cx}" y="${H-10}" text-anchor="middle" fill="var(--text-muted)" font-size="9.5">W${wk.w}</text>`;
-    }
     if (wk.grenze) {
       const gy = H - padB - (wk.grenze / maxY) * (H - padT - padB);
       gPts.push(`${cx},${gy}`);
     }
   });
+
+  weeks.forEach((wk, idx) => {
+    const xCol = padL + step * idx;
+    const cx = xCol + step / 2;
+    const bh = (wk.vol / maxY) * (H - padT - padB);
+    const y = H - padB - bh;
+    const over = wk.grenze && wk.vol > wk.grenze;
+    const gy = wk.grenze ? (H - padB - (wk.grenze / maxY) * (H - padT - padB)) : null;
+
+    html += `<g class="chart-hover-col" data-wk-idx="${idx}">`;
+    html += `<rect class="hover-band" x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" rx="4"/>`;
+    html += `<rect class="vol-bar" x="${cx - bw/2}" y="${y}" width="${bw}" height="${Math.max(0, bh)}" rx="3" fill="${over ? '#ef4444' : 'var(--accent)'}" opacity="0.85"/>`;
+    if (gy !== null) {
+      html += `<circle class="grenze-dot" cx="${cx}" cy="${gy}" r="4" fill="#f59e0b" stroke="var(--surface)" stroke-width="1.5"/>`;
+    }
+    if (idx % 2 === 0 || idx === weeks.length - 1) {
+      html += `<text x="${cx}" y="${H-10}" text-anchor="middle" fill="var(--text-muted)" font-size="9.5">W${wk.w}</text>`;
+    }
+    html += `<rect x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" fill="transparent"/>`;
+    html += `</g>`;
+  });
+
   if (gPts.length > 1) {
-    html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="5,3" points="${gPts.join(' ')}"/>`;
+    html += `<polyline fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-dasharray="5,3" style="pointer-events:none;" points="${gPts.join(' ')}"/>`;
   }
   svg.innerHTML = html;
+
+  svg.querySelectorAll('.chart-hover-col').forEach(el => {
+    const wk = weeks[Number(el.dataset.wkIdx)];
+    const pct = wk.grenze && wk.grenze > 0 ? Math.round((wk.vol / wk.grenze) * 100) : null;
+    const over = wk.grenze && wk.vol > wk.grenze;
+    const bstList = wk.sessions.length
+      ? wk.sessions.map(s => `<div class="tt-row"><span>${fmtShortDE(s.datum)} ${escapeHtml(s.baustein)}</span><strong>${s.volumen}</strong></div>`).join('')
+      : `<div style="color:#94a3b8;">Keine Einheiten</div>`;
+    const ttHtml = `
+      <div class="tt-title">Woche ${wk.w}</div>
+      <div class="tt-sub">${fmtShortDE(wk.wStart)} – ${fmtShortDE(wk.wEnd)}</div>
+      <div class="tt-row"><span>Wochenvolumen</span><strong>${wk.vol} Wdh.</strong></div>
+      <div class="tt-row"><span>Einheiten</span><strong>${wk.sessions.length}</strong></div>
+      ${wk.grenze ? `<div class="tt-row"><span>Grenze (${cfg.grenzFaktor}×)</span><strong style="color:${over ? '#f87171' : '#fcd34d'};">${Math.round(wk.grenze)} Wdh. (${pct} %)</strong></div>` : ''}
+      <hr class="tt-sep">
+      <div class="tt-list">${bstList}</div>
+    `;
+    bindTooltipHandlers(el, ttHtml);
+    el.addEventListener('click', ev => { ev.stopPropagation(); showAppTooltip(ev, ttHtml); });
+  });
 }
 
 function drawDensityChart(kpi) {
@@ -1462,14 +1586,32 @@ function drawDensityChart(kpi) {
   html += `<text x="${W-padR}" y="${ty-6}" text-anchor="end" fill="#16a34a" font-size="11" font-weight="700">Ziel 2: ${target.toFixed(1)} Wdh./Min</text>`;
 
   items.forEach((it, idx) => {
-    const cx = padL + step * idx + step / 2;
+    const xCol = padL + step * idx;
+    const cx = xCol + step / 2;
     const bh = (it.wdhProMin / maxY) * (H - padT - padB);
     const y = H - padB - bh;
-    html += `<rect x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="5" fill="var(--accent)" opacity="0.88"/>`;
+    html += `<g class="chart-hover-col" data-den-idx="${idx}">`;
+    html += `<rect class="hover-band" x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" rx="5"/>`;
+    html += `<rect class="vol-bar" x="${cx - bw/2}" y="${y}" width="${bw}" height="${bh}" rx="5" fill="var(--accent)" opacity="0.88"/>`;
     html += `<text x="${cx}" y="${y-6}" text-anchor="middle" fill="var(--text)" font-size="11" font-weight="700">${it.wdhProMin.toFixed(1)}</text>`;
     html += `<text x="${cx}" y="${H-10}" text-anchor="middle" fill="var(--text-muted)" font-size="10.5">${fmtShortDE(it.datum)} (${it.baustein})</text>`;
+    html += `<rect x="${xCol}" y="${padT}" width="${step}" height="${H - padT - padB}" fill="transparent"/>`;
+    html += `</g>`;
   });
   svg.innerHTML = html;
+
+  svg.querySelectorAll('.chart-hover-col').forEach(el => {
+    const it = items[Number(el.dataset.denIdx)];
+    const pct = Math.round((it.wdhProMin / target) * 100);
+    const ttHtml = `
+      <div class="tt-title">${escapeHtml(it.baustein)} · ${fmtDE(it.datum)}</div>
+      <div class="tt-row"><span>Dichte</span><strong>${it.wdhProMin.toFixed(2)} Wdh./Min (${pct} %)</strong></div>
+      <div class="tt-row"><span>Volumen / Dauer</span><strong>${it.volumen} Wdh. in ${it.dauer} Min</strong></div>
+      <div class="tt-row"><span>Längster Satz</span><strong>${it.laengster}</strong></div>
+    `;
+    bindTooltipHandlers(el, ttHtml);
+    el.addEventListener('click', ev => { ev.stopPropagation(); showAppTooltip(ev, ttHtml); });
+  });
 }
 
 // ============================================================================
@@ -2330,6 +2472,162 @@ document.getElementById('btnGistSync').addEventListener('click', smartSyncGist);
 document.getElementById('btnGistPush').addEventListener('click', () => pushToGist(false));
 document.getElementById('btnGistPull').addEventListener('click', () => pullFromGist(true));
 
+
+
+// ============================================================================
+// FLOATING TOOLTIP & 7-TAGE-DETAIL-MODAL
+// ============================================================================
+let _lastKPI = null;
+const _tooltipEl = document.getElementById('appTooltip');
+
+function escapeHtml(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function positionTooltip(ev) {
+  if (!_tooltipEl || !ev) return;
+  const pad = 14;
+  const x = ev.clientX ?? (ev.touches && ev.touches[0] ? ev.touches[0].clientX : 0);
+  const y = ev.clientY ?? (ev.touches && ev.touches[0] ? ev.touches[0].clientY : 0);
+  const rect = _tooltipEl.getBoundingClientRect();
+  let left = x + pad;
+  let top = y - rect.height - pad;
+  if (left + rect.width > window.innerWidth - 10) left = Math.max(10, x - rect.width - pad);
+  if (top < 10) top = Math.min(window.innerHeight - rect.height - 10, y + pad + 6);
+  _tooltipEl.style.left = left + 'px';
+  _tooltipEl.style.top = top + 'px';
+}
+
+function showAppTooltip(ev, html) {
+  if (!_tooltipEl) return;
+  _tooltipEl.innerHTML = html;
+  _tooltipEl.classList.add('visible');
+  positionTooltip(ev);
+}
+
+function hideAppTooltip() {
+  if (_tooltipEl) _tooltipEl.classList.remove('visible');
+}
+
+window.addEventListener('scroll', hideAppTooltip, { passive: true });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.chart-hover-col') && !e.target.closest('.kpi-clickable')) hideAppTooltip();
+});
+
+window.openLastSessionFromDash = function() {
+  if (!_lastKPI || !_lastKPI.lastSession) {
+    showToast('Noch keine Einheit vorhanden.');
+    return;
+  }
+  hideAppTooltip();
+  openEditSession(_lastKPI.lastSession.id);
+};
+
+window.openVol7Modal = function() {
+  if (!_lastKPI) return;
+  hideAppTooltip();
+  const kpi = _lastKPI;
+  const cfg = state.einstellungen;
+  const fromStr = addDaysStr(kpi.heute, -6);
+  const loadPct = kpi.grenze7 > 0 ? Math.round((kpi.volumen7 / kpi.grenze7) * 100) : 0;
+  const rest = kpi.grenze7 > 0 ? Math.round(kpi.grenze7 - kpi.volumen7) : null;
+
+  const listHtml = kpi.last7.length
+    ? `<div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>Datum</th><th>Baustein</th><th>Ausführung</th><th class="num">Vol.</th><th></th></tr></thead>
+          <tbody>
+            ${[...kpi.last7].reverse().map(s => {
+              const ausf = s.detail ? s.detail : `${s.saetze || ''} × ${s.wdh || ''}`;
+              return `<tr>
+                <td style="white-space:nowrap;"><strong>${fmtDE(s.datum)}</strong></td>
+                <td>${escapeHtml(s.baustein)}</td>
+                <td style="font-family:monospace;font-size:0.82rem;">${escapeHtml(ausf)}</td>
+                <td class="num"><strong>${s.volumen}</strong></td>
+                <td><button class="btn btn-sm" onclick="closeVol7Modal();openEditSession(${s.id});" title="Bearbeiten">✏️</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`
+    : `<p style="color:var(--text-muted);font-size:0.88rem;margin-top:10px;">In den letzten 7 Tagen wurden keine Einheiten protokolliert.</p>`;
+
+  document.getElementById('vol7ModalBody').innerHTML = `
+    <div style="font-size:0.84rem;color:var(--text-muted);margin-bottom:10px;">
+      Zeitraum: <strong>${fmtDE(fromStr)} – ${fmtDE(kpi.heute)}</strong> (${kpi.einh7} ${kpi.einh7 === 1 ? 'Einheit' : 'Einheiten'})
+    </div>
+    <div class="form-grid" style="margin-bottom:10px;">
+      <div class="status-box" style="margin:0;">
+        <div style="font-size:0.74rem;text-transform:uppercase;font-weight:700;">7-Tage-Volumen</div>
+        <div style="font-size:1.35rem;font-weight:800;color:var(--text);">${kpi.volumen7} Wdh.</div>
+      </div>
+      <div class="status-box" style="margin:0;">
+        <div style="font-size:0.74rem;text-transform:uppercase;font-weight:700;">Grenze (${cfg.grenzFaktor}× 4W-Schnitt)</div>
+        <div style="font-size:1.35rem;font-weight:800;color:${rest !== null && rest < 0 ? '#dc2626' : 'var(--text)'};">${Math.round(kpi.grenze7)} Wdh. (${loadPct} %)</div>
+      </div>
+    </div>
+    <div style="font-size:0.84rem;color:var(--text-muted);">
+      4-Wochen-Schnitt davor: <strong>${Math.round(kpi.schnitt4W)} Wdh./Woche</strong>
+      ${rest !== null ? (rest >= 0 ? ` · Noch <strong>${rest} Wdh.</strong> Spielraum bis zur Grenze` : ` · Grenze um <strong style="color:#dc2626;">${Math.abs(rest)} Wdh.</strong> überschritten`) : ''}
+    </div>
+    ${listHtml}
+  `;
+  document.getElementById('vol7Modal').classList.add('open');
+};
+
+window.closeVol7Modal = function() {
+  document.getElementById('vol7Modal').classList.remove('open');
+};
+
+document.getElementById('btnCloseVol7Modal').addEventListener('click', closeVol7Modal);
+document.getElementById('vol7Modal').addEventListener('click', e => {
+  if (e.target.id === 'vol7Modal') closeVol7Modal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('vol7Modal').classList.contains('open')) closeVol7Modal();
+});
+
+function buildVol7TooltipHtml(kpi) {
+  const fromStr = addDaysStr(kpi.heute, -6);
+  const loadPct = kpi.grenze7 > 0 ? Math.round((kpi.volumen7 / kpi.grenze7) * 100) : 0;
+  const rest = kpi.grenze7 > 0 ? Math.round(kpi.grenze7 - kpi.volumen7) : null;
+  const items = kpi.last7.length
+    ? kpi.last7.map(s => `<div class="tt-row"><span>${fmtShortDE(s.datum)} ${escapeHtml(s.baustein)}</span><strong>${s.volumen}</strong></div>`).join('')
+    : `<div style="color:#94a3b8;">Keine Einheiten in den letzten 7 Tagen</div>`;
+  return `
+    <div class="tt-title">Volumen 7 Tage: ${kpi.volumen7} Wdh.</div>
+    <div class="tt-sub">${fmtShortDE(fromStr)} – ${fmtShortDE(kpi.heute)} · ${kpi.einh7} ${kpi.einh7 === 1 ? 'Einheit' : 'Einheiten'}</div>
+    <div class="tt-list">${items}</div>
+    <hr class="tt-sep">
+    <div class="tt-row"><span>4-Wochen-Schnitt</span><strong>${Math.round(kpi.schnitt4W)} / Wo</strong></div>
+    <div class="tt-row"><span>Belastungsgrenze</span><strong>${Math.round(kpi.grenze7)} (${loadPct} %)</strong></div>
+    ${rest !== null ? `<div class="tt-row"><span>${rest >= 0 ? 'Spielraum' : 'Überschritten'}</span><strong style="color:${rest >= 0 ? '#4ade80' : '#f87171'};">${rest >= 0 ? '+' + rest : rest} Wdh.</strong></div>` : ''}
+    <div class="tt-hint">Klicken für Details &amp; Einheiten ↗</div>
+  `;
+}
+
+function buildLastSessionTooltipHtml(kpi) {
+  const s = kpi.lastSession;
+  if (!s) return `<div class="tt-title">Noch keine Einheit</div>`;
+  const ausf = s.detail ? s.detail : `${s.saetze || ''} × ${s.wdh || ''}`;
+  return `
+    <div class="tt-title">${escapeHtml(s.baustein)}</div>
+    <div class="tt-sub">${fmtDE(s.datum)}${s.uhrzeit ? ' · ' + escapeHtml(s.uhrzeit) + ' Uhr' : ''}</div>
+    <div class="tt-row"><span>Ausführung</span><strong>${escapeHtml(ausf)}</strong></div>
+    <div class="tt-row"><span>Volumen / Längster</span><strong>${s.volumen} / ${s.laengster}</strong></div>
+    ${s.pause ? `<div class="tt-row"><span>Pause</span><strong>${s.pause} s</strong></div>` : ''}
+    ${s.rir ? `<div class="tt-row"><span>RIR</span><strong>${escapeHtml(s.rir)}</strong></div>` : ''}
+    ${s.ellbogen !== null && s.ellbogen !== '' ? `<div class="tt-row"><span>Ellbogen</span><strong>${s.ellbogen}/10</strong></div>` : ''}
+    <div class="tt-hint">Klicken zum Öffnen / Bearbeiten ↗</div>
+  `;
+}
+
+function bindTooltipHandlers(el, htmlBuilder) {
+  if (!el) return;
+  el.addEventListener('mouseenter', ev => showAppTooltip(ev, typeof htmlBuilder === 'function' ? htmlBuilder() : htmlBuilder));
+  el.addEventListener('mousemove', positionTooltip);
+  el.addEventListener('mouseleave', hideAppTooltip);
+}
 
 // ============================================================================
 // AUTO-DATE REFRESH (verhindert altes Datum nach mehrtägig offenem Tab)
